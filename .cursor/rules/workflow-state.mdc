@@ -1,0 +1,25 @@
+# Workflow State
+
+## State
+- Phase: VALIDATE
+- Status: COMPLETED
+- Epic: Epic 8 — Draft 7a0 visual parity polish
+
+## Plan
+- (completed) Port 7a0-Cruzeiro draft/play visual system into scoped `.draft-seven-*` CSS and restyle drafting cockpit components without changing WC26 data or campaign logic.
+
+## Log
+- Scoped `.draft-seven-root` Panini theme + Anton/Archivo/Hanken fonts in globals.css
+- NationDraftBoard: bordered 3-col layout, draft header, mobile slot pills
+- Roll panel, pool rows, striped pitch + disc slots, box score restyled to 7a0 reference
+- `/draft` page widens to full cockpit width during drafting phase
+- i18n: `pickForPosition` key added
+
+## ArchiveLog
+- Bracket flow: group scores → R32, winner propagation, 3rd place losers
+- Bracket UI: SVG connectors, share button, scoring display
+- match-results.ts: API merge + local fallback
+- Ranking + Bolão local-first with import via share hash
+- Draft: DraftPitch formation-aware; Epic 5 campaign integrated with bracket
+- Design system: stadium CSS, BracketTree, draft components, PWA deploy
+- i18n PT-BR/EN-US toggle

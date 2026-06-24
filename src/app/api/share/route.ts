@@ -6,6 +6,7 @@ import {
   buildShareText,
   type SharePayload,
 } from "@/lib/share-token";
+import { parseShareLangParam, type Locale } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,9 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as Partial<SharePayload>;
+    const body = (await request.json()) as Partial<SharePayload> & {
+      locale?: string;
+    };
 
     if (!body.predictions || typeof body.predictions !== "object") {
       return NextResponse.json(
@@ -30,13 +33,14 @@ export async function POST(request: Request) {
       ownerName: body.ownerName,
     };
 
+    const locale: Locale = parseShareLangParam(body.locale ?? null);
     const hash = await encodeBracketToken(payload);
-    const url = buildShareUrl(hash);
+    const url = buildShareUrl(hash, locale);
 
     return NextResponse.json({
       hash,
       url,
-      shareText: `${buildShareText(payload.ownerName)}\n${url}`,
+      shareText: `${buildShareText(payload.ownerName, locale)}\n${url}`,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";

@@ -2,35 +2,48 @@ import { ImageResponse } from "@vercel/og";
 import { NextRequest } from "next/server";
 import { decodeBracketToken } from "@/lib/share-token";
 import { getTeam } from "@/data/teams";
+import {
+  getShareOgContent,
+  getTeamName,
+  parseShareLangParam,
+} from "@/lib/i18n";
 
 export const runtime = "edge";
 
 export async function GET(request: NextRequest) {
   const hash = request.nextUrl.searchParams.get("hash");
+  const locale = parseShareLangParam(request.nextUrl.searchParams.get("lang"));
 
   let ownerName: string | undefined;
   let predictionCount = 0;
-  let champion: string | undefined;
+  let championName: string | undefined;
+  let valid = false;
 
   if (hash) {
     const payload = await decodeBracketToken(hash);
     if (payload) {
+      valid = true;
       ownerName = payload.ownerName;
       predictionCount = Object.keys(payload.predictions).length;
       const finalPred = payload.predictions["final"];
       if (finalPred) {
         const team = getTeam(finalPred.winner);
-        champion = team?.namePt ?? finalPred.winner;
+        championName = team
+          ? getTeamName(team, locale)
+          : finalPred.winner;
       }
     }
   }
 
-  const title = ownerName
-    ? `${ownerName} montou o bracket da Copa 2026`
-    : "WC26 Bracket + Draft";
-  const subtitle = champion
-    ? `Palpite de campeã: ${champion}`
-    : `${predictionCount} palpites no mata-mata`;
+  const og = getShareOgContent(
+    {
+      ownerName,
+      predictionCount,
+      championName,
+      valid,
+    },
+    locale,
+  );
 
   return new ImageResponse(
     (
@@ -68,7 +81,7 @@ export async function GET(request: NextRequest) {
             maxWidth: 1000,
           }}
         >
-          {title}
+          {og.title}
         </div>
         <div
           style={{
@@ -78,7 +91,7 @@ export async function GET(request: NextRequest) {
             fontWeight: 700,
           }}
         >
-          {subtitle}
+          {og.imageSubtitle}
         </div>
         <div
           style={{
@@ -88,7 +101,7 @@ export async function GET(request: NextRequest) {
             fontWeight: 600,
           }}
         >
-          wc26.app · Monte o seu bracket e desafie seus amigos
+          {og.footer}
         </div>
       </div>
     ),

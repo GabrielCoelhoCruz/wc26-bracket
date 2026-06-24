@@ -1,0 +1,28 @@
+import type { Stadium } from "@/types/wc26";
+
+/**
+ * 16 host stadiums — FIFA World Cup 2026
+ * Synced from https://worldcup26.ir — 2026-06-24
+ */
+export const stadiums: readonly Stadium[] = [
+  { id: "14", name: "Lumen Field", fifaName: "Seattle Stadium", city: "Seattle", country: "United States", capacity: 69000, region: "Western" },
+  { id: "8", name: "Hard Rock Stadium", fifaName: "Miami Stadium", city: "Miami (Miami Gardens)", country: "United States", capacity: 65000, region: "Eastern" },
+  { id: "13", name: "BC Place", fifaName: "BC Place Vancouver", city: "Vancouver", country: "Canada", capacity: 54000, region: "Western" },
+  { id: "15", name: "Levi's Stadium", fifaName: "San Francisco Bay Area Stadium", city: "San Francisco Bay Area (Santa Clara)", country: "United States", capacity: 71000, region: "Western" },
+  { id: "3", name: "Estadio BBVA", fifaName: "Estadio Monterrey", city: "Monterrey (Guadalupe)", country: "Mexico", capacity: 53500, region: "Central" },
+  { id: "1", name: "Estadio Azteca", fifaName: "Mexico City Stadium", city: "Mexico City", country: "Mexico", capacity: 83000, region: "Central" },
+  { id: "2", name: "Estadio Akron", fifaName: "Estadio Guadalajara", city: "Guadalajara (Zapopan)", country: "Mexico", capacity: 48000, region: "Central" },
+  { id: "5", name: "NRG Stadium", fifaName: "Houston Stadium", city: "Houston", country: "United States", capacity: 72000, region: "Central" },
+  { id: "16", name: "SoFi Stadium", fifaName: "Los Angeles Stadium", city: "Los Angeles (Inglewood)", country: "United States", capacity: 70000, region: "Western" },
+  { id: "7", name: "Mercedes-Benz Stadium", fifaName: "Atlanta Stadium", city: "Atlanta", country: "United States", capacity: 75000, region: "Eastern" },
+  { id: "9", name: "Gillette Stadium", fifaName: "Boston Stadium", city: "Boston (Foxborough)", country: "United States", capacity: 65000, region: "Eastern" },
+  { id: "6", name: "GEHA Field at Arrowhead Stadium", fifaName: "Kansas City Stadium", city: "Kansas City", country: "United States", capacity: 73000, region: "Central" },
+  { id: "10", name: "Lincoln Financial Field", fifaName: "Philadelphia Stadium", city: "Philadelphia", country: "United States", capacity: 69000, region: "Eastern" },
+  { id: "4", name: "AT&T Stadium", fifaName: "Dallas Stadium", city: "Dallas (Arlington, Texas)", country: "United States", capacity: 94000, region: "Central" },
+  { id: "11", name: "MetLife Stadium", fifaName: "New York/New Jersey Stadium", city: "New York/New Jersey (East Rutherford)", country: "United States", capacity: 82500, region: "Eastern" },
+  { id: "12", name: "BMO Field", fifaName: "Toronto Stadium", city: "Toronto", country: "Canada", capacity: 45000, region: "Eastern" },
+];
+
+export function getStadium(id: string): Stadium | undefined {
+  return stadiums.find((s) => s.id === id);
+}

@@ -1,289 +1,240 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { DraftPick, DraftTeam, Player } from "@/types/wc26";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { matches as defaultMatches } from "@/data/matches";
+import { getQualifiedTeamCount } from "@/data/players";
+import { useLanguage } from "@/components/i18n/LanguageProvider";
+import { CampaignBracketPreview } from "@/components/campaign/CampaignBracketPreview";
+import { CampaignMatchView } from "@/components/campaign/CampaignMatchView";
+import { CampaignResultCard } from "@/components/campaign/CampaignResultCard";
+import { CampaignSetup } from "@/components/campaign/CampaignSetup";
+import { NationDraftBoard } from "@/components/campaign/NationDraftBoard";
 import {
-  buildDraftTeam,
-  getDraftPositionName,
-  getPositionEmoji,
-  makePick,
-  ROUNDS,
-  simulateDraft,
-  startDraft,
-} from "@/lib/draft";
-import { matchNarrative, simulateMatch, type SimulatedMatch } from "@/lib/draft-sim";
-import { getTeam } from "@/data/teams";
-import { DraftResultCard } from "@/components/draft/DraftResultCard";
-import { RefreshCw, Dices, Share2, Trophy, Users } from "lucide-react";
-import clsx from "clsx";
+  countR32ResolvedTeams,
+  isR32Ready,
+} from "@/lib/campaign-path";
+import {
+  beginNationDraft,
+  clearCampaign,
+  createCampaignSetup,
+  finishDraftAndPrepareCampaign,
+  loadCampaign,
+  saveCampaign,
+  simulateAllRemaining,
+  simulateCurrentMatch,
+  startPlaying,
+  type NationDraftState,
+} from "@/lib/campaign-sim";
+import {
+  pickNationPlayer,
+  rerollNation,
+} from "@/lib/draft-nation-roll";
+import { applyGroupScoresToMatches, fetchMergedResults } from "@/lib/match-results";
+import type { FormationId } from "@/lib/formations";
+import type { CampaignState, DraftMode, Match, PlayStyle, Player } from "@/types/wc26";
+import PageSkeleton from "@/components/ui/PageSkeleton";
 
-const STORAGE_KEY = "wc26-draft-state";
+const STORAGE_KEY_SCORES = "wc26-group-scores";
 
-function serializableState(state: ReturnType<typeof startDraft>) {
-  return {
-    round: state.round,
-    completed: state.completed,
-    seed: state.seed,
-    picks: state.picks.map((p) => ({
-      round: p.round,
-      chosen: p.chosen,
-      options: p.options,
-    })),
-  };
-}
+const subscribeNoop = () => () => {};
+const getClientSnapshot = () => true;
+const getServerSnapshot = () => false;
 
-function loadState() {
-  if (typeof window === "undefined") return null;
+function loadGroupScores(): Record<string, { homeScore: number; awayScore: number; finished: boolean }> {
+  if (typeof window === "undefined") return {};
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as ReturnType<typeof serializableState>;
+    const raw = localStorage.getItem(STORAGE_KEY_SCORES);
+    return raw ? JSON.parse(raw) : {};
   } catch {
-    return null;
+    return {};
   }
 }
 
-function saveState(state: ReturnType<typeof serializableState>) {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    // ignore
-  }
-}
+function DraftCampaignInner() {
+  const { t, format } = useLanguage();
+  const [campaign, setCampaign] = useState<CampaignState | null>(() => loadCampaign());
+  const [draft, setDraft] = useState<NationDraftState | null>(null);
+  const [resultMatches, setResultMatches] = useState<Match[]>([...defaultMatches]);
+  const [loadingMatches, setLoadingMatches] = useState(true);
 
-export default function DraftPage() {
-  const [draft, setDraft] = useState<ReturnType<typeof startDraft> | null>(null);
-  const [match, setMatch] = useState<SimulatedMatch | null>(null);
-  const [showCard, setShowCard] = useState(false);
-  const loadedRef = useRef(false);
+  const [formation, setFormation] = useState<FormationId>("4-3-3");
+  const [playStyle, setPlayStyle] = useState<PlayStyle>("balanced");
+  const [draftMode, setDraftMode] = useState<DraftMode>("classic");
 
   useEffect(() => {
-    if (loadedRef.current) return;
-    loadedRef.current = true;
-    const saved = loadState();
-    if (saved) {
-      const s = startDraft(saved.seed);
-      let state = s;
-      // Replay saved picks so the generated team matches
-      for (const pick of saved.picks) {
-        if (pick.chosen) {
-          state = makePick(state, pick.chosen.id);
-        }
+    let cancelled = false;
+    (async () => {
+      const groupScores = loadGroupScores();
+      const { matches } = await fetchMergedResults();
+      if (!cancelled) {
+        setResultMatches(applyGroupScoresToMatches(matches, groupScores));
+        setLoadingMatches(false);
       }
-      setDraft(state);
-      if (state.completed) {
-        const team = buildDraftTeam(state.picks);
-        const cpu = simulateDraftToTeam();
-        setMatch(simulateMatch(team, cpu));
-      }
-    } else {
-      setDraft(startDraft());
-    }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  useEffect(() => {
-    if (draft) {
-      saveState(serializableState(draft));
-    }
-  }, [draft]);
+  const liveMatches = useMemo(
+    () => resultMatches,
+    [resultMatches],
+  );
 
-  const currentPick = draft?.picks[draft.round];
-  const myTeam = useMemo(() => (draft?.completed ? buildDraftTeam(draft.picks) : null), [draft]);
+  const r32Count = useMemo(() => countR32ResolvedTeams(liveMatches), [liveMatches]);
+  const r32Ready = useMemo(() => isR32Ready(liveMatches), [liveMatches]);
+
+  useEffect(() => {
+    if (campaign) saveCampaign(campaign);
+  }, [campaign]);
+
+  const phase = campaign?.phase ?? "setup";
+
+  function handleStartDraft() {
+    clearCampaign();
+    const setup = createCampaignSetup(formation, playStyle, draftMode);
+    const { campaign: next, draft: d } = beginNationDraft(setup);
+    setCampaign(next);
+    setDraft(d);
+  }
 
   function handlePick(player: Player) {
-    if (!draft || draft.completed) return;
-    const next = makePick(draft, player.id);
-    setDraft(next);
-    if (next.completed) {
-      const team = buildDraftTeam(next.picks);
-      const cpu = simulateDraftToTeam();
-      const sim = simulateMatch(team, cpu);
-      setMatch(sim);
+    if (!draft || !campaign) return;
+    const nextDraft = pickNationPlayer(draft, player.id);
+    setDraft(nextDraft);
+    if (nextDraft.completed) {
+      const prepared = finishDraftAndPrepareCampaign(
+        { ...campaign, draftRounds: nextDraft.draftRounds },
+        nextDraft,
+        liveMatches,
+      );
+      setCampaign(prepared);
+      setDraft(null);
     }
+  }
+
+  function handleReroll() {
+    if (!draft) return;
+    setDraft(rerollNation(draft));
+  }
+
+  function handleStartCampaign() {
+    if (!campaign) return;
+    setCampaign(startPlaying(campaign));
+  }
+
+  function handleSimulateOne() {
+    if (!campaign) return;
+    setCampaign(simulateCurrentMatch(campaign));
+  }
+
+  function handleSimulateAll() {
+    if (!campaign) return;
+    setCampaign(simulateAllRemaining(campaign));
   }
 
   function handleRestart() {
-    const fresh = startDraft();
-    setDraft(fresh);
-    setMatch(null);
-    setShowCard(false);
-  }
-
-  function handleSimulate() {
-    const cpu1 = simulateDraftToTeam();
-    const cpu2 = simulateDraftToTeam();
-    setMatch(simulateMatch(cpu1, cpu2));
+    clearCampaign();
+    setCampaign(null);
     setDraft(null);
-    setShowCard(false);
   }
 
-  if (!draft) {
-    return (
-      <div className="flex flex-1 items-center justify-center px-4 py-20 text-zinc-400">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#fbbf24] border-t-transparent" />
-      </div>
-    );
+  if (loadingMatches) {
+    return <PageSkeleton lines={7} />;
   }
 
   return (
-    <div className="flex flex-1 flex-col items-center px-4 py-8 sm:py-12 text-zinc-300">
-      <div className="w-full max-w-4xl">
-        {/* Gold section label — 7a0 style */}
-        <p className="text-[#fbbf24] text-sm font-bold tracking-widest mb-4 text-center uppercase">
-          Draft
-        </p>
-
-        <div className="mb-8 text-center">
-          <h1 className="text-3xl font-black text-white sm:text-4xl">Monte Seu XI</h1>
-          <p className="mt-2 text-sm text-zinc-500">
-            Draft de 11 rodadas no esquema 4-3-3. Escolha um jogador por rodada e simule contra um
-            time adversário.
-          </p>
-        </div>
-
-        {!draft.completed ? (
-          <div className="mx-auto max-w-2xl">
-            <div className="mb-6 flex items-center justify-between">
-              <div className="text-sm font-semibold text-[#fbbf24]">
-                Rodada {draft.round + 1} de {ROUNDS}
-              </div>
-              <div className="text-xs text-zinc-500">
-                {currentPick && getDraftPositionName(draft.round)}
-              </div>
-            </div>
-
-            <div className="mb-6 h-2 w-full overflow-hidden rounded-full bg-zinc-800">
-              <div
-                className="h-full bg-[#fbbf24] transition-all"
-                style={{ width: `${(draft.round / ROUNDS) * 100}%` }}
-              />
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              {currentPick?.options.map((player) => {
-                const team = getTeam(player.team);
-                return (
-                  <button
-                    key={player.id}
-                    onClick={() => handlePick(player)}
-                    className="group flex items-center gap-4 rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 text-left transition hover:border-[#fbbf24]/50 hover:shadow-lg"
-                  >
-                    <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#0f0f0f] text-2xl">
-                      {getPositionEmoji(player.position)}
-                    </span>
-                    <div className="flex-1">
-                      <div className="font-bold text-white group-hover:text-[#fbbf24]">
-                        {player.name}
-                      </div>
-                      <div className="text-xs text-zinc-500">
-                        {team?.flag} {team?.namePt} · {player.position} · {player.rating} OVR
-                      </div>
-                    </div>
-                    <div className="text-lg font-black text-[#fbbf24]">{player.rating}</div>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="mt-8 flex justify-center">
-              <button
-                onClick={handleRestart}
-                className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 px-4 py-2 text-sm font-semibold transition hover:bg-zinc-800/60"
-              >
-                <RefreshCw size={16} /> Reiniciar draft
-              </button>
-            </div>
-          </div>
-        ) : (
+    <div
+      className={`flex flex-1 flex-col items-center px-0 py-8 sm:py-12 ${
+        phase === "drafting" ? "w-full" : ""
+      }`}
+    >
+      <div
+        className={
+          phase === "drafting" && draft
+            ? "w-full"
+            : "w-full max-w-4xl px-4"
+        }
+      >
+        {phase !== "drafting" && (
           <>
-            <div className="grid gap-6 lg:grid-cols-2">
-              {myTeam && <TeamPanel team={myTeam} label="Seu time" icon={<Users size={18} />} />}
-              {match && <TeamPanel team={match.away} label="Adversário" icon={<Trophy size={18} />} />}
+            <p className="mb-4 text-center text-sm font-bold uppercase tracking-widest text-accent">
+              {t.draft.accent}
+            </p>
+
+            <div className="mb-8 text-center">
+              <h1 className="text-3xl font-black sm:text-4xl">{t.draft.title}</h1>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {format(t.draft.subtitle, { count: getQualifiedTeamCount() })}
+              </p>
             </div>
-
-            {match && (
-              <div className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 text-center">
-                <div className="text-sm font-semibold uppercase tracking-wider text-zinc-500">
-                  Resultado simulado
-                </div>
-                <div className="mt-2 flex items-center justify-center gap-4 text-4xl font-black text-white sm:text-5xl">
-                  <span>{match.homeScore}</span>
-                  <span className="text-[#fbbf24]">–</span>
-                  <span>{match.awayScore}</span>
-                </div>
-                <p className="mx-auto mt-3 max-w-md text-sm text-zinc-400">{matchNarrative(match)}</p>
-
-                <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-                  <button
-                    onClick={() => setShowCard(true)}
-                    className="inline-flex items-center gap-2 rounded-lg bg-[#1a5c2a] hover:brightness-110 px-5 py-2.5 text-sm font-black text-white transition"
-                  >
-                    <Share2 size={16} /> Ver card de compartilhamento
-                  </button>
-                  <button
-                    onClick={handleRestart}
-                    className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 px-5 py-2.5 text-sm font-semibold transition hover:bg-zinc-800/60"
-                  >
-                    <RefreshCw size={16} /> Novo draft
-                  </button>
-                  <button
-                    onClick={handleSimulate}
-                    className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 px-5 py-2.5 text-sm font-semibold transition hover:bg-zinc-800/60"
-                  >
-                    <Dices size={16} /> Simular CPU × CPU
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {showCard && match && (
-              <div className="mt-8 flex flex-col items-center gap-4">
-                <DraftResultCard match={match} />
-                <button
-                  onClick={() => setShowCard(false)}
-                  className="text-sm font-semibold text-zinc-500 hover:text-zinc-300 transition"
-                >
-                  Fechar card
-                </button>
-              </div>
-            )}
           </>
+        )}
+
+        {phase === "setup" && !draft && (
+          <CampaignSetup
+            formation={formation}
+            playStyle={playStyle}
+            draftMode={draftMode}
+            r32Ready={r32Ready}
+            r32Count={r32Count}
+            onFormationChange={setFormation}
+            onPlayStyleChange={setPlayStyle}
+            onDraftModeChange={setDraftMode}
+            onStart={handleStartDraft}
+          />
+        )}
+
+        {phase === "drafting" && draft && campaign && (
+          <NationDraftBoard
+            draft={draft}
+            draftMode={campaign.draftMode}
+            onPick={handlePick}
+            onReroll={handleReroll}
+          />
+        )}
+
+        {phase === "ready" && campaign && (
+          <CampaignBracketPreview campaign={campaign} onStart={handleStartCampaign} />
+        )}
+
+        {phase === "playing" && campaign && (
+          <CampaignMatchView
+            campaign={campaign}
+            onSimulateOne={handleSimulateOne}
+            onSimulateAll={handleSimulateAll}
+          />
+        )}
+
+        {phase === "finished" && campaign && (
+          <CampaignResultCard campaign={campaign} onRestart={handleRestart} />
+        )}
+
+        {(phase !== "setup" || draft) && phase !== "finished" && (
+          <div className={`flex justify-center ${phase === "drafting" ? "mt-4 px-4" : "mt-8"}`}>
+            <button
+              type="button"
+              onClick={handleRestart}
+              className="text-sm font-semibold text-muted-foreground transition hover:text-foreground"
+            >
+              {t.common.cancelCampaign}
+            </button>
+          </div>
         )}
       </div>
     </div>
   );
 }
 
-function TeamPanel({ team, label, icon }: { team: DraftTeam; label: string; icon: React.ReactNode }) {
-  return (
-    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5">
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2 text-sm font-semibold text-zinc-400">
-          {icon} {label}
-        </div>
-        <div className="text-lg font-black text-[#fbbf24]">{team.rating}</div>
+export default function DraftPage() {
+  const isClient = useSyncExternalStore(subscribeNoop, getClientSnapshot, getServerSnapshot);
+  const { t } = useLanguage();
+  if (!isClient) {
+    return (
+      <div className="flex flex-1 items-center justify-center py-20 text-muted-foreground">
+        {t.common.loading}
       </div>
-      <ul className="space-y-2">
-        {team.players.map((p) => {
-          const teamData = getTeam(p.team);
-          return (
-            <li key={p.id} className="flex items-center gap-3 text-sm">
-              <span className="w-6 text-center">{getPositionEmoji(p.position)}</span>
-              <span className="flex-1 truncate font-medium text-white">{p.name}</span>
-              <span className="text-xs text-zinc-500">
-                {teamData?.flag} {teamData?.namePt}
-              </span>
-              <span className="w-8 text-right font-bold text-zinc-300">{p.rating}</span>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
-}
-
-function simulateDraftToTeam(): DraftTeam {
-  const state = simulateDraft();
-  return buildDraftTeam(state.picks);
+    );
+  }
+  return <DraftCampaignInner />;
 }

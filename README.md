@@ -1,36 +1,77 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# WC26 Bracket
+
+Copa do Mundo 2026 — bracket interativo, draft de XI e ranking local.
+
+## Features
+
+- **Bracket**: fase de grupos + mata-mata com palpites e avanço automático
+- **Draft**: monte seu XI 4-3-3 e simule partidas
+- **Ranking**: leaderboard local (importe brackets via link)
+- **Bolão**: compare palpites entre amigos (local-first)
+- **Share**: links JWT assinados (`/api/share`, `/b/[hash]`)
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment Variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```env
+# Required in production for signed share links
+BRACKET_SHARE_SECRET=your_secret
 
-## Learn More
+# Optional — live WC results via API-Sports
+API_FOOTBALL_KEY=your_key
 
-To learn more about Next.js, take a look at the following resources:
+# Optional — Supabase catalog (projetoCopa)
+NEXT_PUBLIC_SUPABASE_URL=https://...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+# Share URLs and SEO (sitemap, robots)
+NEXT_PUBLIC_BASE_URL=https://your-domain.com
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Without `API_FOOTBALL_KEY`, the app uses static seed data and manual group scores.  
+Without `BRACKET_SHARE_SECRET`, share tokens work in dev but are not cryptographically verified.
 
-## Deploy on Vercel
+## Local-First Limits
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Predictions and ranking are stored in **browser localStorage**
+- No server-side user accounts or sync between devices
+- Share links encode predictions in a signed JWT — no server persistence needed
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Scripts
+
+| Command | Description |
+|---------|-------------|
+| `pnpm dev` | Development server |
+| `pnpm build` | Production build |
+| `pnpm start` | Serve production build |
+| `pnpm lint` | ESLint |
+| `pnpm test` | Run unit tests (Vitest) |
+| `pnpm sync:worldcup` | Sync matches/teams from worldcup26.ir → `src/data/` |
+| `pnpm sync:squads` | Sync player squads → `src/data/squads.json` |
+| `pnpm check:players` | Validate player data integrity |
+| `pnpm icons:pwa` | Regenerate PWA PNG icons from SVG source |
+
+### Data sync workflow
+
+1. Set `API_FOOTBALL_KEY` in `.env.local` if you want live API-Sports data
+2. Run `pnpm sync:worldcup` to refresh `matches.ts` and `teams.ts`
+3. Run `pnpm sync:squads` to refresh squad rosters
+4. Run `pnpm check:players` to validate before committing
+
+## Deploy (Vercel)
+
+- Package manager: **pnpm** (see `vercel.json`)
+- Set `BRACKET_SHARE_SECRET` and `NEXT_PUBLIC_BASE_URL` in project env vars
+- Analytics: [@vercel/analytics](https://vercel.com/docs/analytics) enabled in layout
+
+## PWA
+
+Icons are PNG (`public/icons/icon-192.png`, `icon-512.png`). Regenerate from SVG with `pnpm icons:pwa`.

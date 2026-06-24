@@ -1,0 +1,54 @@
+# WC26 Epics
+
+## Epic 1: Bracket Flow (DONE)
+- Connect group scores to R32 slots
+- Auto-advance predicted winners through rounds
+- SVG connector lines in BracketTree
+- Rich knockout cards with API fixtures, real flags, live/scheduled badges
+
+## Epic 2: Scoring & Results (IN PROGRESS)
+- Merge API/local results into match state ✅
+- Display score breakdown on bracket page ✅
+- Live match polling + summary strip on `/bracket` ✅
+- Group filter (Todos / Ao vivo / Próximos / Encerrados) ✅
+
+## Epic 3: Social Local-First
+- Share button on `/bracket`
+- Improved `/b/[hash]` preview
+- Local ranking with import via share hash
+- Local bolão with bracket comparison
+
+## Epic 4: Draft Polish (DONE)
+- Visual pitch component with formation layouts
+- Share card for draft results
+
+## Epic 6: Design System Redesign (DONE)
+- Stadium CSS variables + JetBrains Mono scoreboard font
+- UI components: StadiumButton, ScoreboardHeader, FlagBadge, PitchCard, LiveIndicator, StadiumSection
+- BracketTree: green connectors, mobile collapsible, LED inputs, champion confetti
+- Draft: PlayerSlot, PlayerCard, DraftTimer, DraftBench
+- RankingRow + /api/ranking score endpoint
+- PWA manifest + Vercel deploy config
+- Nation-dice draft (roll WC26 selection → pick player per position)
+- Formation, play style, Classic/Almanaque modes with rerolls
+- Knockout-only campaign (R32 → Final) tied to bracket reality
+- `campaign-path.ts` opponent resolution from groups + predictions
+- `campaign-sim.ts` step-by-step or simulate-all
+- Enhanced `draft-sim.ts`: play style, penalties, goal events
+- `/draft` wizard + CTA on `/bracket`
+- i18n: PT-BR / EN-US toggle in header, `LanguageProvider` + typed dictionaries in `src/lib/i18n.ts` ✅
+
+## Epic 7: Full WC26 Squads 26×48 (DONE)
+- `squads.json` — 26 players per qualified nation (1,248 total)
+- `scripts/sync-squads.mjs` — hybrid ingest (API-Football → Wikipedia → seed/heuristic)
+- `src/lib/position-map.ts` — position normalization + squad sort order
+- `players.ts` loads from `squads.json`; `npm run check:players` validates coverage
+- `SquadRosterList` — grouped compact roster (GK/DEF/MID/FWD) in nation draft UI
+- `getSquadForRound` sorts by pickable position first, then shirt number / role
+
+## Epic 8: Draft 7a0 Layout + projetoCopa API (DONE)
+- 3-column draft cockpit (roll panel | pitch | box score) inspired by GuiPassoskt/7a0-Cruzeiro — WC26 nations only
+- `DraftRollPanel`, `DraftBoxScore`, `draft-ratings.ts` (attack/defense/overall)
+- Supabase catalog from projetoCopa: `/api/catalog/teams`, `/api/catalog/fixtures`
+- `/api/matches` prefers projetoCopa Supabase scores when configured
+- Visual parity polish: scoped `.draft-seven-*` Panini/sticker theme, striped pitch, circular discs, pool rows (WC26 data unchanged)

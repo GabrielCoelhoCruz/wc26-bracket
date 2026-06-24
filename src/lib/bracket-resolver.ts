@@ -3,10 +3,10 @@
 // Maps group qualifiers to R32 bracket slots and advances winners
 // ---------------------------------------------------------------------------
 
-import { matches } from "@/data/matches";
+import { matches as defaultMatches } from "@/data/matches";
 import { bracketSlots } from "@/data/knockout-bracket";
-import { getGroupQualifiers } from "@/lib/group-standings";
-import type { TeamCode } from "@/types/wc26";
+import { getGroupQualifiers, getBestThirdPlaceTeams } from "@/lib/group-standings";
+import type { Match, TeamCode } from "@/types/wc26";
 
 /**
  * Group pairs that feed into R32 matches.
@@ -21,18 +21,7 @@ export const GROUP_PAIRS: [string, string][] = [
   ["G", "H"],
   ["I", "J"],
   ["K", "L"],
-  ["M", "N"],
-  ["O", "P"],
 ];
-
-export interface ResolvedBracketSlot {
-  slotId: string;
-  matchId: string;
-  team: TeamCode | null;
-  position: 1 | 2;
-  round: number;
-  nextSlotId: string | null;
-}
 
 export interface ResolvedBracketMatch {
   matchId: string;
@@ -41,59 +30,168 @@ export interface ResolvedBracketMatch {
   awayTeam: TeamCode | null;
   nextSlotId: string | null;
   label: string;
+  fixture?: Match;
 }
+
+const KNOCKOUT_STAGES: Match["stage"][] = [
+  "round_of_32",
+  "round_of_16",
+  "quarter_final",
+  "semi_final",
+  "third_place",
+  "final",
+];
+
+/** Map bracket matchId (r32-1, final, etc.) to API fixture data */
+export function buildKnockoutFixtureMap(
+  sourceMatches: readonly Match[] = defaultMatches,
+): Map<string, Match> {
+  const map = new Map<string, Match>();
+
+  const byStage = (stage: Match["stage"]) =>
+    sourceMatches.filter((m) => m.stage === stage);
+
+  byStage("round_of_32").forEach((m, i) => map.set(`r32-${i + 1}`, m));
+  byStage("round_of_16").forEach((m, i) => map.set(`r16-${i + 1}`, m));
+  byStage("quarter_final").forEach((m, i) => map.set(`qf-${i + 1}`, m));
+  byStage("semi_final").forEach((m, i) => map.set(`sf-${i + 1}`, m));
+
+  const third = byStage("third_place")[0];
+  if (third) map.set("third-place", third);
+
+  const finalMatch = byStage("final")[0];
+  if (finalMatch) map.set("final", finalMatch);
+
+  return map;
+}
+
+export function getKnockoutFixtures(
+  sourceMatches: readonly Match[] = defaultMatches,
+): Match[] {
+  return KNOCKOUT_STAGES.flatMap((stage) =>
+    sourceMatches.filter((m) => m.stage === stage),
+  );
+}
+
+type Predictions = Record<
+  string,
+  { winner: TeamCode; homeScore?: number; awayScore?: number }
+>;
 
 /**
  * Resolve which teams occupy each R32 slot based on group results.
- *
- * Pair i (0-indexed) → R32 match indices [i*2, i*2+1]
- * Slot indices within a pair:  [i*4, i*4+1, i*4+2, i*4+3]
- *   slot[i*4]     = R32-{2i+1}: pos 1 (1st odd group)
- *   slot[i*4+1]   = R32-{2i+1}: pos 2 (2nd even group)
- *   slot[i*4+2]   = R32-{2i+2}: pos 1 (1st even group)
- *   slot[i*4+3]   = R32-{2i+2}: pos 2 (2nd odd group)
  */
-export function resolveR32Teams(): Map<string, TeamCode | null> {
+export function resolveR32Teams(
+  sourceMatches: readonly Match[] = defaultMatches,
+): Map<string, TeamCode | null> {
   const slotTeams = new Map<string, TeamCode | null>();
 
   for (let i = 0; i < GROUP_PAIRS.length; i++) {
     const [groupOdd, groupEven] = GROUP_PAIRS[i];
-    const oddQual = getGroupQualifiers(groupOdd);
-    const evenQual = getGroupQualifiers(groupEven);
+    const oddQual = getGroupQualifiers(groupOdd, sourceMatches);
+    const evenQual = getGroupQualifiers(groupEven, sourceMatches);
 
-    // Match A: 1st(odd) vs 2nd(even)
-    // Slot indices in bracketSlots array: [i*4, i*4+1, i*4+2, i*4+3]
     const slotIdxBase = i * 4;
-
-    // R32-{2i+1} slots: baseMatchIdx = i * 2
     const r32SlotsA = bracketSlots.slice(slotIdxBase, slotIdxBase + 2);
     if (r32SlotsA[0]) slotTeams.set(r32SlotsA[0].id, oddQual.first);
     if (r32SlotsA[1]) slotTeams.set(r32SlotsA[1].id, evenQual.second);
 
-    // R32-{2i+2} slots
     const r32SlotsB = bracketSlots.slice(slotIdxBase + 2, slotIdxBase + 4);
     if (r32SlotsB[0]) slotTeams.set(r32SlotsB[0].id, evenQual.first);
     if (r32SlotsB[1]) slotTeams.set(r32SlotsB[1].id, oddQual.second);
   }
 
+  // Remaining 8 R32 slots (R32-25…R32-32) — best third-placed teams
+  const thirdPlace = getBestThirdPlaceTeams(sourceMatches, 8);
+  const thirdPlaceSlots = bracketSlots
+    .filter((s) => s.round === 1)
+    .slice(24, 32);
+  for (let i = 0; i < thirdPlaceSlots.length; i++) {
+    const slot = thirdPlaceSlots[i];
+    if (slot) slotTeams.set(slot.id, thirdPlace[i] ?? null);
+  }
+
   return slotTeams;
+}
+
+function getMatchLoser(
+  homeTeam: TeamCode | null,
+  awayTeam: TeamCode | null,
+  winner: TeamCode | null,
+): TeamCode | null {
+  if (!winner || !homeTeam || !awayTeam) return null;
+  if (winner === homeTeam) return awayTeam;
+  if (winner === awayTeam) return homeTeam;
+  return null;
+}
+
+/**
+ * Propagate predicted winners into downstream bracket slots via nextSlotId.
+ * Mutates slotTeamMap in place and returns it for chaining.
+ */
+export function propagateWinners(
+  slotTeamMap: Map<string, TeamCode | null>,
+  predictions: Predictions,
+  roundSlots: typeof bracketSlots,
+): Map<string, TeamCode | null> {
+  const matchMap = new Map<
+    string,
+    {
+      homeSlot: (typeof roundSlots)[0] | undefined;
+      awaySlot: (typeof roundSlots)[0] | undefined;
+    }
+  >();
+
+  for (const slot of roundSlots) {
+    if (!slot.matchId) continue;
+    const existing = matchMap.get(slot.matchId) ?? {
+      homeSlot: undefined,
+      awaySlot: undefined,
+    };
+    if (slot.position === 1) existing.homeSlot = slot;
+    else existing.awaySlot = slot;
+    matchMap.set(slot.matchId, existing);
+  }
+
+  for (const [matchId, { homeSlot, awaySlot }] of matchMap) {
+    const homeTeam = homeSlot ? (slotTeamMap.get(homeSlot.id) ?? null) : null;
+    const awayTeam = awaySlot ? (slotTeamMap.get(awaySlot.id) ?? null) : null;
+    const winner = predictions[matchId]?.winner ?? null;
+
+    if (!winner) continue;
+
+    const winningSlot =
+      winner === homeTeam ? homeSlot : winner === awayTeam ? awaySlot : null;
+
+    if (winningSlot?.nextSlotId) {
+      slotTeamMap.set(winningSlot.nextSlotId, winner);
+    }
+
+    if (matchId === "sf-1") {
+      const loser = getMatchLoser(homeTeam, awayTeam, winner);
+      if (loser) slotTeamMap.set("3RD-01", loser);
+    }
+    if (matchId === "sf-2") {
+      const loser = getMatchLoser(homeTeam, awayTeam, winner);
+      if (loser) slotTeamMap.set("3RD-02", loser);
+    }
+  }
+
+  return slotTeamMap;
 }
 
 /**
  * Resolve all bracket matches from R32 through to Final.
- * Uses predictions to determine winners and advance them.
+ * Uses predictions to determine winners and advance them via nextSlotId.
  */
 export function resolveFullBracket(
-  predictions: Record<string, { winner: TeamCode; homeScore?: number; awayScore?: number }>,
+  predictions: Predictions,
+  sourceMatches: readonly Match[] = defaultMatches,
 ): ResolvedBracketMatch[] {
-  const r32Teams = resolveR32Teams();
+  const slotTeamMap = resolveR32Teams(sourceMatches);
   const resolvedMatches: ResolvedBracketMatch[] = [];
-  const matchWinners = new Map<string, TeamCode | null>();
+  const fixtureMap = buildKnockoutFixtureMap(sourceMatches);
 
-  // Build a quick lookup for slot → team
-  const slotTeamMap = new Map<string, TeamCode | null>(r32Teams);
-
-  // Group slots by round
   const rounds = [1, 2, 3, 4, 5];
   const roundLabels: Record<number, string> = {
     1: "32 Avos de Final",
@@ -105,75 +203,43 @@ export function resolveFullBracket(
 
   for (const round of rounds) {
     const roundSlots = bracketSlots.filter((s) => s.round === round);
+    propagateWinners(slotTeamMap, predictions, roundSlots);
 
-    // Group slots by matchId
-    const matchMap = new Map<string, { homeSlot: typeof roundSlots[0]; awaySlot: typeof roundSlots[0] }>();
+    const matchMap = new Map<
+      string,
+      {
+        homeSlot: (typeof roundSlots)[0] | undefined;
+        awaySlot: (typeof roundSlots)[0] | undefined;
+      }
+    >();
+
     for (const slot of roundSlots) {
       if (!slot.matchId) continue;
-      const existing = matchMap.get(slot.matchId) ?? { homeSlot: undefined as any, awaySlot: undefined as any };
+      const existing = matchMap.get(slot.matchId) ?? {
+        homeSlot: undefined,
+        awaySlot: undefined,
+      };
       if (slot.position === 1) existing.homeSlot = slot;
       else existing.awaySlot = slot;
       matchMap.set(slot.matchId, existing);
     }
 
     for (const [matchId, { homeSlot, awaySlot }] of matchMap) {
-      // Determine teams for this slot
-      let homeTeam: TeamCode | null = null;
-      let awayTeam: TeamCode | null = null;
+      const homeTeam = homeSlot
+        ? (slotTeamMap.get(homeSlot.id) ?? null)
+        : null;
+      const awayTeam = awaySlot
+        ? (slotTeamMap.get(awaySlot.id) ?? null)
+        : null;
 
-      if (round === 1) {
-        // Round 1: teams come from group stage
-        homeTeam = homeSlot ? slotTeamMap.get(homeSlot.id) ?? null : null;
-        awayTeam = awaySlot ? slotTeamMap.get(awaySlot.id) ?? null : null;
-      } else {
-        // Subsequent rounds: winners from previous round
-        const homeWinner = homeSlot ? matchWinners.get(homeSlot.id) ?? null : null;
-        const awayWinner = awaySlot ? matchWinners.get(awaySlot.id) ?? null : null;
-
-        // For the semi-finals → final/3rd place transition
-        if (homeSlot && homeSlot.nextSlotId === "FINAL-01" && matchId === "sf-1") {
-          // SF-1 winner goes to Final slot 1; loser would go to 3rd place slot 1
-          homeTeam = homeWinner;
-          awayTeam = awayWinner;
-        } else {
-          homeTeam = homeWinner;
-          awayTeam = awayWinner;
-        }
-      }
-
-      // Check prediction for this match
       const pred = predictions[matchId];
-      let winner: TeamCode | null = null;
+      const winner = pred?.winner ?? null;
 
-      if (pred) {
-        winner = pred.winner;
-      } else if (homeTeam && awayTeam) {
-        // No prediction — pick the team with higher rating
-        // We'll use the team code directly as a fallback
-        // (ratings aren't available here, so we stay null)
-      }
-
-      // Store the winner for advancing
-      if (winner && homeSlot) {
-        // Also store under the slot id so feeder slots can find it
-        matchWinners.set(homeSlot.id, winner);
-      }
-      if (winner && awaySlot) {
-        matchWinners.set(awaySlot.id, winner);
-      }
-
-      // Also store under matchId so the next round can reference it
-      if (winner) {
-        matchWinners.set(matchId, winner);
-      }
-
-      // Build a label
       let label = "";
       if (round === 5) {
-        if (matchId === "final") label = "Final";
-        else label = "3º Lugar";
+        label = matchId === "final" ? "Final" : "3º Lugar";
       } else {
-        label = `${roundLabels[round]}`;
+        label = roundLabels[round] ?? "";
       }
 
       resolvedMatches.push({
@@ -183,6 +249,7 @@ export function resolveFullBracket(
         awayTeam,
         nextSlotId: homeSlot?.nextSlotId ?? awaySlot?.nextSlotId ?? null,
         label,
+        fixture: fixtureMap.get(matchId),
       });
     }
   }
@@ -190,38 +257,38 @@ export function resolveFullBracket(
   return resolvedMatches;
 }
 
-/**
- * Get R32 team assignments for a specific bracket slot based on group results.
- * Returns the team code or null if undetermined.
- */
-export function getTeamForBracketSlot(slotId: string): TeamCode | null {
-  const r32Teams = resolveR32Teams();
+/** Get R32 team assignments for a specific bracket slot */
+export function getTeamForBracketSlot(
+  slotId: string,
+  sourceMatches: readonly Match[] = defaultMatches,
+): TeamCode | null {
+  const r32Teams = resolveR32Teams(sourceMatches);
   return r32Teams.get(slotId) ?? null;
 }
 
-/**
- * Get the qualifying match label for a bracket slot (e.g. "1º GRP A" or "2º GRP B")
- */
+/** Get the qualifying match label for a bracket slot (e.g. "1º GRP A") */
 export function getBracketSlotLabel(slotId: string): string {
   const slot = bracketSlots.find((s) => s.id === slotId);
   if (!slot) return "";
 
-  // For R32, find which group pair this belongs to
   if (slot.round === 1) {
     const idx = bracketSlots.indexOf(slot);
     const pairIdx = Math.floor(idx / 4);
-    const posInPair = idx % 4;
-    const groupPair = GROUP_PAIRS[pairIdx];
-    if (!groupPair) return "";
 
-    const [groupOdd, groupEven] = groupPair;
+    if (pairIdx < GROUP_PAIRS.length) {
+      const groupPair = GROUP_PAIRS[pairIdx];
+      if (!groupPair) return "";
 
-    // Positions within a pair of 4 slots:
-    // 0: 1st odd group, 1: 2nd even group, 2: 1st even group, 3: 2nd odd group
-    if (posInPair === 0) return `1º GRP ${groupOdd}`;
-    if (posInPair === 1) return `2º GRP ${groupEven}`;
-    if (posInPair === 2) return `1º GRP ${groupEven}`;
-    if (posInPair === 3) return `2º GRP ${groupOdd}`;
+      const [groupOdd, groupEven] = groupPair;
+      const posInPair = idx % 4;
+
+      if (posInPair === 0) return `1º GRP ${groupOdd}`;
+      if (posInPair === 1) return `2º GRP ${groupEven}`;
+      if (posInPair === 2) return `1º GRP ${groupEven}`;
+      if (posInPair === 3) return `2º GRP ${groupOdd}`;
+    }
+
+    return "3º Melhor";
   }
 
   return "";

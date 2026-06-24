@@ -3,14 +3,15 @@
 // Calculates group tables from match results and determines qualifiers
 // ---------------------------------------------------------------------------
 
-import { matches } from "@/data/matches";
-import { teams, getTeam } from "@/data/teams";
-import type { TeamCode } from "@/types/wc26";
+import { matches as defaultMatches } from "@/data/matches";
+import { getAllTeams, getTeam } from "@/data/teams";
+import type { Match, TeamCode } from "@/types/wc26";
 
 export interface GroupStandingRow {
   team: TeamCode;
   teamName: string;
   flag: string;
+  flagUrl?: string;
   played: number;
   won: number;
   drawn: number;
@@ -29,7 +30,7 @@ export interface GroupStanding {
 /** Get all unique group letters from the teams data */
 export function getGroupLetters(): string[] {
   const groupSet = new Set<string>();
-  for (const t of teams) {
+  for (const t of getAllTeams()) {
     if (t.group) groupSet.add(t.group);
   }
   return Array.from(groupSet).sort();
@@ -37,19 +38,21 @@ export function getGroupLetters(): string[] {
 
 /** Get all teams in a given group */
 export function getGroupTeams(group: string): TeamCode[] {
-  return teams
+  return getAllTeams()
     .filter((t) => t.group === group)
     .map((t) => t.code as TeamCode);
 }
 
 /** Build standings for a single group */
-export function getGroupStandings(group: string): GroupStandingRow[] {
+export function getGroupStandings(
+  group: string,
+  sourceMatches: readonly Match[] = defaultMatches,
+): GroupStandingRow[] {
   const groupTeams = getGroupTeams(group);
-  const groupMatches = matches.filter(
+  const groupMatches = sourceMatches.filter(
     (m) => m.group === group && m.stage === "group",
   );
 
-  // Initialize standings
   const standings = new Map<
     TeamCode,
     {
@@ -75,7 +78,6 @@ export function getGroupStandings(group: string): GroupStandingRow[] {
     });
   }
 
-  // Process match results
   for (const match of groupMatches) {
     const home = match.homeTeam as TeamCode;
     const away = match.awayTeam as TeamCode;
@@ -84,11 +86,11 @@ export function getGroupStandings(group: string): GroupStandingRow[] {
     const awayRow = standings.get(away);
     if (!homeRow || !awayRow) continue;
 
-    const homeScore = match.homeScore ?? 0;
-    const awayScore = match.awayScore ?? 0;
+    if (match.status !== "finished") continue;
+    if (match.homeScore === undefined || match.awayScore === undefined) continue;
 
-    // Only count if the match has been played
-    if (match.status === "scheduled") continue;
+    const homeScore = match.homeScore;
+    const awayScore = match.awayScore;
 
     homeRow.played++;
     awayRow.played++;
@@ -114,8 +116,7 @@ export function getGroupStandings(group: string): GroupStandingRow[] {
     }
   }
 
-  // Build sorted rows
-  const rows: GroupStandingRow[] = Array.from(standings.entries())
+  return Array.from(standings.entries())
     .map(([code, data]) => {
       const team = getTeam(code);
       return {
@@ -127,34 +128,35 @@ export function getGroupStandings(group: string): GroupStandingRow[] {
       };
     })
     .sort((a, b) => {
-      // Sort by: points > goal difference > goals for
       if (b.points !== a.points) return b.points - a.points;
       if (b.goalDifference !== a.goalDifference)
         return b.goalDifference - a.goalDifference;
       return b.goalsFor - a.goalsFor;
     });
-
-  return rows;
 }
 
 /** Get all group standings */
-export function getAllGroupStandings(): GroupStanding[] {
+export function getAllGroupStandings(
+  sourceMatches: readonly Match[] = defaultMatches,
+): GroupStanding[] {
   return getGroupLetters().map((group) => ({
     group,
-    rows: getGroupStandings(group),
+    rows: getGroupStandings(group, sourceMatches),
   }));
 }
 
 /** Get the teams that qualify from a group (top 2) */
-export function getGroupQualifiers(group: string): {
+export function getGroupQualifiers(
+  group: string,
+  sourceMatches: readonly Match[] = defaultMatches,
+): {
   first: TeamCode | null;
   second: TeamCode | null;
 } {
-  const rows = getGroupStandings(group);
+  const rows = getGroupStandings(group, sourceMatches);
   const hasResults = rows.some((r) => r.played > 0);
 
   if (!hasResults) {
-    // No results yet — rank by rating as default seeding
     const groupTeams = getGroupTeams(group)
       .map((code) => ({ code, team: getTeam(code) }))
       .sort((a, b) => (b.team?.rating ?? 0) - (a.team?.rating ?? 0));
@@ -172,10 +174,53 @@ export function getGroupQualifiers(group: string): {
 }
 
 /** Check if all matches in a group have been played/resolved */
-export function isGroupComplete(group: string): boolean {
-  const groupMatches = matches.filter(
+export function isGroupComplete(
+  group: string,
+  sourceMatches: readonly Match[] = defaultMatches,
+): boolean {
+  const groupMatches = sourceMatches.filter(
     (m) => m.group === group && m.stage === "group",
   );
   if (groupMatches.length === 0) return false;
   return groupMatches.every((m) => m.status !== "scheduled");
+}
+
+function compareStandingRows(
+  a: GroupStandingRow,
+  b: GroupStandingRow,
+): number {
+  if (b.points !== a.points) return b.points - a.points;
+  if (b.goalDifference !== a.goalDifference)
+    return b.goalDifference - a.goalDifference;
+  return b.goalsFor - a.goalsFor;
+}
+
+/** Best third-placed teams across all groups (8 qualify for R32 in WC2026) */
+export function getBestThirdPlaceTeams(
+  sourceMatches: readonly Match[] = defaultMatches,
+  count = 8,
+): (TeamCode | null)[] {
+  const allStandings = getAllGroupStandings(sourceMatches);
+
+  const thirdPlaces = allStandings
+    .map((g) => g.rows[2])
+    .filter((row): row is GroupStandingRow => row !== undefined);
+
+  const withResults = thirdPlaces.filter((r) => r.played > 0);
+
+  if (withResults.length > 0) {
+    return [...withResults]
+      .sort(compareStandingRows)
+      .slice(0, count)
+      .map((r) => r.team);
+  }
+
+  return thirdPlaces
+    .map((row) => {
+      const team = getTeam(row.team);
+      return { team: row.team, rating: team?.rating ?? 0 };
+    })
+    .sort((a, b) => b.rating - a.rating)
+    .slice(0, count)
+    .map((e) => e.team);
 }

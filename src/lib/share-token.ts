@@ -18,6 +18,13 @@
 
 import { SignJWT, jwtVerify } from "jose";
 import type { BracketPrediction } from "@/types/wc26";
+import {
+  appendShareLangParam,
+  defaultLocale,
+  formatMessage,
+  getMessages,
+  type Locale,
+} from "@/lib/i18n";
 
 export interface SharePayload {
   predictions: BracketPrediction;
@@ -107,20 +114,27 @@ export async function decodeBracketToken(
 }
 
 /**
+ * Extract a bare share token from a pasted URL, hash, or path.
+ */
+export function normalizeShareHash(input: string): string {
+  const trimmed = input.trim().replace(/^.*\/b\//, "")
+  return trimmed.split("?")[0].split("#")[0]
+}
+
+/**
  * Build the absolute share URL for a bracket token.
  */
-export function buildShareUrl(token: string): string {
-  if (isClient()) {
-    return `${window.location.origin}/b/${token}`;
-  }
-  const base = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
-  return `${base}/b/${token}`;
+export function buildShareUrl(token: string, locale: Locale = defaultLocale): string {
+  const base = isClient()
+    ? window.location.origin
+    : process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
+  return appendShareLangParam(`${base}/b/${token}`, locale);
 }
 
 /**
  * Build a friendly WhatsApp-style share message.
  */
-export function buildShareText(ownerName?: string): string {
-  const who = ownerName ? `${ownerName} ` : "";
-  return `${who}montou o bracket da Copa 2026. 🏆⚽\n\nDá uma olhada e manda o seu:`;
+export function buildShareText(ownerName?: string, locale: Locale = defaultLocale): string {
+  const who = ownerName ? `${ownerName} ` : ""
+  return formatMessage(getMessages(locale).share.shareText, { who })
 }

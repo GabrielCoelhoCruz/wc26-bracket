@@ -1,0 +1,76 @@
+# WC26 Bracket Architecture
+
+## Stack
+- Next.js 16 App Router, React 19, TypeScript, Tailwind 4
+- Client state: `localStorage` (predictions, group scores, ranking, bolão)
+- Share: JWT tokens via `jose` (`/api/share`, `/b/[hash]`)
+- Optional live data: API-Football via `/api/matches`
+
+## Data Flow
+1. Static seed data in `src/data/` synced from [worldcup26.ir](https://worldcup26.ir) (teams, matches, stadiums)
+2. Sync script (`npm run sync:worldcup`) enriches seed with API fields: `flagUrl`, `iso2`, `apiId`, stadium/time/scorers/labels
+3. Live scores via `/api/matches`, `/api/groups` (worldcup26.ir, 30s cache); client merges API overlay onto static seed
+4. User edits group scores → merged into `liveMatches`
+5. `resolveFullBracket(predictions, liveMatches)` → knockout tree with `fixture?: Match` per slot
+6. `calculateScore(predictions, resultMatches)` → points
+7. Share token encodes predictions for `/b/[hash]`
+
+## API-Enriched Local Seed Data
+- `Team.flag` emoji kept as fallback; `Team.flagUrl` from flagcdn.com when synced
+- `TeamFlag` component (`next/image` + emoji fallback) used in bracket UI and group tables
+- `Match` optional fields: `apiId`, `time`, `stadiumId`, `persianDate`, scorers, knockout labels
+- `buildKnockoutFixtureMap()` maps `r32-1`…`final` → real fixtures for display only; predictions still drive advancement
+- Live matches: `status: "live"` with partial scores; standings count only `finished`
+
+## Local-First Limits
+- No database or auth; ranking/bolão are per-browser only
+- Share links are read-only; import into local ranking/bolão manually
+- Live data from worldcup26.ir (free, no API key); falls back to static seed on error
+- Re-sync static data: `npm run sync:worldcup`
+- Squad data: `npm run sync:squads` → `src/data/squads.json` (26×48); validate with `npm run check:players`
+- **projetoCopa catalog**: when `NEXT_PUBLIC_SUPABASE_*` is set, `/api/matches` merges live scores from Supabase (`football_fixtures`); `/api/catalog/teams` and `/api/catalog/fixtures` expose read-only catalog
+- UI language: client-side `pt-BR` (default) or `en-US` via header toggle; persisted in `localStorage` key `wc26-locale`; no locale-prefixed routes
+
+## Squad Data (Draft / Campaign)
+- `squads.json` — per-nation roster of 26 `SquadPlayerSeed` entries (name, position, rating, shirtNumber, role, club?)
+- `players.ts` — builds `Player[]` with ids; `getPlayersByTeam()` returns sorted squad
+- `sync-squads.mjs` — API-Football `/players/squads` (if `API_FOOTBALL_KEY`), Wikipedia WC squad tables, legacy seed padding
+- `position-map.ts` — API/Wikipedia position strings → draft enum; `compareSquadPlayers()` for call-up order
+
+## Key Modules
+| Module | Role |
+|--------|------|
+| `i18n.ts` | PT-BR / EN-US dictionaries, locale helpers, team names, date formatting |
+| `LanguageProvider.tsx` | Client locale state (`wc26-locale` in localStorage), `useLanguage()` hook |
+| `LanguageToggle.tsx` | Header PT/EN toggle beside theme switch |
+| `group-standings.ts` | Group tables and qualifiers |
+| `bracket-resolver.ts` | R32 seeding + `propagateWinners()` + knockout fixture map |
+| `TeamFlag.tsx` | Real flag images with emoji fallback |
+| `StadiumButton`, `PitchCard`, `ScoreboardHeader`, etc. | Stadium design system (`src/components/ui/`) |
+| `PlayerSlot`, `PlayerCard`, `DraftTimer`, `DraftBench` | Draft visual components |
+| `RankingRow` | Leaderboard row component |
+| `bracket-store.ts` | Prediction persistence |
+| `bracket-score.ts` | Scoring engine |
+| `share-token.ts` | JWT share encode/decode |
+| `local-ranking.ts` | Local leaderboard |
+| `local-pool.ts` | Local bolão + comparison |
+| `worldcup-api.ts` | Client for worldcup26.ir REST API |
+| `worldcup-mapper.ts` | API → internal type mapping |
+| `draft-nation-roll.ts` | 7a0-style nation dice draft |
+| `position-map.ts` | Squad position mapping and sort order |
+| `SquadRosterList.tsx` | Grouped 26-player roster in draft UI |
+| `DraftRollPanel.tsx` | Left column: nation dice + full squad list (7a0 layout) |
+| `DraftBoxScore.tsx` | Right column: attack/defense/overall + lineup table |
+| `draft-seven-*` (globals.css) | Scoped draft cockpit layout; aliases stadium tokens (grass/gold/LED/card) |
+| `copa-catalog.ts` | Map projetoCopa Supabase fixtures → `Match` |
+| `supabase/catalog.ts` | Read-only Supabase client for shared WC catalog |
+| `nation-squad.ts` | Auto XI per qualified nation |
+| `campaign-path.ts` | Knockout path from bracket state |
+| `campaign-sim.ts` | Campaign orchestration + localStorage |
+
+## Campaign Flow (Draft → Bracket)
+1. User configures formation, play style, draft mode on `/draft`
+2. Nation dice draft: roll team → pick player for open formation slot (11 rounds)
+3. `loadBracketTree(getPredictions(), liveMatches)` resolves R32–Final opponents
+4. User simulates knockout matches; win advances, loss ends campaign
+5. State persisted in `localStorage` key `wc26-campaign-state`

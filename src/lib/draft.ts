@@ -3,24 +3,16 @@
 // ---------------------------------------------------------------------------
 
 import { players } from "@/data/players";
+import {
+  type FormationId,
+  getFormationLabel,
+  getFormationSlots,
+} from "@/lib/formations";
 import type { Player, DraftPick, DraftTeam, TeamCode } from "@/types/wc26";
 
-export const FORMATION_SLOTS: readonly Player["position"][] = [
-  // 4-3-3
-  "GK",
-  "RB",
-  "CB",
-  "CB",
-  "LB",
-  "DM",
-  "CM",
-  "CM",
-  "RW",
-  "ST",
-  "LW",
-];
+export type { FormationId };
+export { FORMATION_LIST, FORMATIONS } from "@/lib/formations";
 
-export const ROUNDS = FORMATION_SLOTS.length;
 export const OPTIONS_PER_ROUND = 5;
 
 export interface DraftState {
@@ -28,6 +20,15 @@ export interface DraftState {
   picks: DraftPick[];
   completed: boolean;
   seed: number;
+  formation: FormationId;
+}
+
+function getSlots(state: DraftState): readonly Player["position"][] {
+  return getFormationSlots(state.formation);
+}
+
+export function getRounds(state: DraftState): number {
+  return getSlots(state).length;
 }
 
 /** Deterministic PRNG so seeding works. */
@@ -40,7 +41,6 @@ function mulberry32(seed: number) {
   };
 }
 
-/** Simple seeded hash of a string. */
 function cyrb53(str: string, seed = 0): number {
   let h1 = 0xdeadbeef ^ seed;
   let h2 = 0x41c6ce57 ^ seed;
@@ -69,31 +69,42 @@ function shuffle<T>(array: T[], rng: () => number): T[] {
   return copy;
 }
 
-function pickOptions(round: number, used: Set<string>, rng: () => number): Player[] {
-  const position = FORMATION_SLOTS[round];
-  const candidates = players.filter((p) => p.position === position && !used.has(p.id));
+function pickOptions(
+  round: number,
+  used: Set<string>,
+  rng: () => number,
+  slots: readonly Player["position"][],
+): Player[] {
+  const position = slots[round];
+  const candidates = players.filter((pl) => pl.position === position && !used.has(pl.id));
   const shuffled = shuffle(candidates, rng);
   return shuffled.slice(0, OPTIONS_PER_ROUND);
 }
 
-export function startDraft(seed?: string | number): DraftState {
+export function startDraft(
+  seed?: string | number,
+  formation: FormationId = "4-3-3",
+): DraftState {
   const s = makeSeed(seed);
   const rng = mulberry32(s);
+  const slots = getFormationSlots(formation);
   const used = new Set<string>();
-  const firstOptions = pickOptions(0, used, rng);
+  const firstOptions = pickOptions(0, used, rng, slots);
   return {
     round: 0,
     picks: [{ round: 0, options: firstOptions }],
     completed: false,
     seed: s,
+    formation,
   };
 }
 
 export function makePick(state: DraftState, playerId: string): DraftState {
   if (state.completed) return state;
 
+  const slots = getSlots(state);
   const currentPick = state.picks[state.round];
-  const chosen = currentPick.options.find((p) => p.id === playerId);
+  const chosen = currentPick.options.find((pl) => pl.id === playerId);
   if (!chosen) return state;
 
   const newPicks = state.picks.map((pick, idx) =>
@@ -103,7 +114,7 @@ export function makePick(state: DraftState, playerId: string): DraftState {
   const used = new Set(newPicks.map((p) => p.chosen?.id).filter(Boolean) as string[]);
   const nextRound = state.round + 1;
 
-  if (nextRound >= ROUNDS) {
+  if (nextRound >= slots.length) {
     return {
       ...state,
       picks: newPicks,
@@ -113,7 +124,7 @@ export function makePick(state: DraftState, playerId: string): DraftState {
   }
 
   const rng = mulberry32(state.seed + nextRound);
-  const nextOptions = pickOptions(nextRound, used, rng);
+  const nextOptions = pickOptions(nextRound, used, rng, slots);
 
   return {
     ...state,
@@ -123,9 +134,12 @@ export function makePick(state: DraftState, playerId: string): DraftState {
   };
 }
 
-export function simulateDraft(seed?: string | number): DraftState {
+export function simulateDraft(
+  seed?: string | number,
+  formation: FormationId = "4-3-3",
+): DraftState {
   const rng = mulberry32(makeSeed(seed));
-  let state = startDraft(makeSeed(seed));
+  let state = startDraft(makeSeed(seed), formation);
   while (!state.completed) {
     const options = state.picks[state.round].options;
     const choice = options[Math.floor(rng() * options.length)];
@@ -134,24 +148,19 @@ export function simulateDraft(seed?: string | number): DraftState {
   return state;
 }
 
-export function buildDraftTeam(picks: DraftPick[]): DraftTeam {
+export function buildDraftTeam(picks: DraftPick[], formation: FormationId = "4-3-3"): DraftTeam {
   const chosen = picks.map((p) => p.chosen).filter((p): p is Player => p !== undefined);
   const rating = Math.round(calculateDraftRating(chosen));
   return {
     id: `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     players: chosen,
-    formation: "4-3-3",
+    formation: getFormationLabel(formation),
     rating,
   };
 }
 
-/**
- * Weighted average rating.
- * Attackers and midfielders weight a little more because they decide a match,
- * but keep it close to a plain average so ratings stay intuitive.
- */
-export function calculateDraftRating(players: readonly Player[]): number {
-  if (players.length === 0) return 0;
+export function calculateDraftRating(playersList: readonly Player[]): number {
+  if (playersList.length === 0) return 0;
   const weights: Record<Player["position"], number> = {
     GK: 0.9,
     CB: 1.0,
@@ -166,16 +175,16 @@ export function calculateDraftRating(players: readonly Player[]): number {
   };
   let totalWeight = 0;
   let weightedSum = 0;
-  for (const p of players) {
-    const w = weights[p.position] ?? 1;
+  for (const pl of playersList) {
+    const w = weights[pl.position] ?? 1;
     totalWeight += w;
-    weightedSum += p.rating * w;
+    weightedSum += pl.rating * w;
   }
   return totalWeight ? weightedSum / totalWeight : 0;
 }
 
-export function getDraftPositionName(round: number): string {
-  const slot = FORMATION_SLOTS[round];
+export function getDraftPositionName(state: DraftState, round: number): string {
+  const slot = getSlots(state)[round];
   const names: Record<Player["position"], string> = {
     GK: "Goleiro",
     RB: "Lateral Direito",
@@ -210,3 +219,6 @@ export function getPositionEmoji(position: Player["position"]): string {
 export function getTeamCodeForPlayer(player: Player): TeamCode {
   return player.team;
 }
+
+/** @deprecated use getRounds(state) */
+export const ROUNDS = 11;

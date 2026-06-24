@@ -1,55 +1,84 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { decodeBracketToken, buildShareUrl } from "@/lib/share-token";
+import { getTeam } from "@/data/teams";
+import {
+  buildOgImagePath,
+  getShareOgContent,
+  getTeamName,
+  openGraphLocale,
+  parseShareLangParam,
+  type Locale,
+} from "@/lib/i18n";
 import SharedBracketView from "./SharedBracketView";
 
 interface BracketPageProps {
   params: Promise<{ hash: string }>;
+  searchParams: Promise<{ lang?: string }>;
 }
 
-export async function generateMetadata({
-  params,
-}: BracketPageProps): Promise<Metadata> {
-  const { hash } = await params;
-  const payload = await decodeBracketToken(hash);
-
-  const title = payload?.ownerName
-    ? `${payload.ownerName} montou o bracket da Copa 2026`
-    : "Bracket da Copa 2026";
-  const description = payload
-    ? "Dá uma olhada no bracket e manda o seu. ⚽🏆"
-    : "Link inválido ou expirado.";
+function buildShareMetadata(hash: string, locale: Locale, valid: boolean, payload: Awaited<ReturnType<typeof decodeBracketToken>>) {
+  const champion = payload?.predictions["final"]?.winner;
+  const champTeam = champion ? getTeam(champion) : null;
+  const og = getShareOgContent(
+    {
+      ownerName: payload?.ownerName,
+      predictionCount: payload ? Object.keys(payload.predictions).length : 0,
+      championName: champTeam
+        ? getTeamName(champTeam, locale)
+        : champion,
+      valid,
+    },
+    locale,
+  );
 
   return {
-    title,
-    description,
+    title: og.title,
+    description: og.description,
     openGraph: {
-      title,
-      description,
-      url: buildShareUrl(hash),
+      title: og.title,
+      description: og.description,
+      url: buildShareUrl(hash, locale),
       siteName: "WC26 Bracket + Draft",
       images: [
         {
-          url: `/api/og?hash=${encodeURIComponent(hash)}`,
+          url: buildOgImagePath(hash, locale),
           width: 1200,
           height: 630,
-          alt: title,
+          alt: og.title,
         },
       ],
-      type: "website",
-      locale: "pt_BR",
+      type: "website" as const,
+      locale: openGraphLocale(locale),
     },
     twitter: {
-      card: "summary_large_image",
-      title,
-      description,
-      images: [`/api/og?hash=${encodeURIComponent(hash)}`],
+      card: "summary_large_image" as const,
+      title: og.title,
+      description: og.description,
+      images: [buildOgImagePath(hash, locale)],
     },
   };
 }
 
-export default async function BracketHashPage({ params }: BracketPageProps) {
+export async function generateMetadata({
+  params,
+  searchParams,
+}: BracketPageProps): Promise<Metadata> {
   const { hash } = await params;
+  const { lang } = await searchParams;
+  const locale = parseShareLangParam(lang ?? null);
+  const payload = await decodeBracketToken(hash);
+
+  return buildShareMetadata(hash, locale, !!payload, payload);
+}
+
+export default async function BracketHashPage({
+  params,
+  searchParams,
+}: BracketPageProps) {
+  const { hash } = await params;
+  const { lang } = await searchParams;
+  const localeFromUrl = lang ? parseShareLangParam(lang) : undefined;
   const payload = await decodeBracketToken(hash);
 
   if (!payload) {
@@ -61,6 +90,7 @@ export default async function BracketHashPage({ params }: BracketPageProps) {
       hash={hash}
       predictions={payload.predictions}
       ownerName={payload.ownerName}
+      syncLocale={localeFromUrl}
     />
   );
 }

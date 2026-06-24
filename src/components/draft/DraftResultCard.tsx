@@ -3,6 +3,7 @@
 import type { SimulatedMatch } from "@/lib/draft-sim";
 import { getTeam } from "@/data/teams";
 import { getPositionEmoji } from "@/lib/draft";
+import { useLanguage } from "@/components/i18n/LanguageProvider";
 import { Share2, Trophy } from "lucide-react";
 import { useRef, useState } from "react";
 
@@ -11,13 +12,24 @@ interface DraftResultCardProps {
 }
 
 export function DraftResultCard({ match }: DraftResultCardProps) {
+  const { t, format } = useLanguage();
   const cardRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
+  const rc = t.draft.resultCard;
 
   const homeFlag = match.home.players[0]?.team ? getTeam(match.home.players[0].team)?.flag : "⚙️";
   const awayFlag = match.away.players[0]?.team ? getTeam(match.away.players[0].team)?.flag : "⚙️";
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const draftUrl = `${origin}/draft`;
 
-  const text = `Meu XI WC26: ${match.home.rating} × ${match.away.rating} — Placar simulado ${match.homeScore}–${match.awayScore}`;
+  const text = [
+    `⚽ ${format(rc.myXi, { formation: match.home.formation, rating: match.home.rating })}`,
+    format(rc.simulatedScoreLine, { home: match.homeScore, away: match.awayScore }),
+    ``,
+    ...match.home.players.map((p) => `${getPositionEmoji(p.position)} ${p.name} (${p.rating})`),
+    ``,
+    format(t.draft.shareBuild, { url: origin }),
+  ].join("\n");
 
   async function copyText() {
     try {
@@ -37,7 +49,7 @@ export function DraftResultCard({ match }: DraftResultCardProps) {
       >
         <div className="flex items-center justify-between">
           <div className="text-xs font-bold uppercase tracking-widest text-[var(--accent)]">
-            WC26 Draft
+            {rc.badge}
           </div>
           <Trophy size={18} className="text-[var(--accent)]" />
         </div>
@@ -45,20 +57,20 @@ export function DraftResultCard({ match }: DraftResultCardProps) {
         <div className="mt-4 flex items-center justify-between">
           <div className="text-center">
             <div className="text-4xl">{homeFlag}</div>
-            <div className="mt-1 text-sm font-bold text-white">Seu XI</div>
+            <div className="mt-1 text-sm font-bold text-foreground">{t.common.yourXi}</div>
             <div className="text-xs opacity-70">Rating {match.home.rating}</div>
           </div>
           <div className="flex flex-col items-center">
-            <div className="text-5xl font-black text-white">
+            <div className="text-5xl font-black text-foreground">
               {match.homeScore} – {match.awayScore}
             </div>
             <div className="mt-1 text-xs font-semibold uppercase tracking-wider opacity-70">
-              Placar simulado
+              {rc.simulatedScore}
             </div>
           </div>
           <div className="text-center">
             <div className="text-4xl">{awayFlag}</div>
-            <div className="mt-1 text-sm font-bold text-white">Adversário</div>
+            <div className="mt-1 text-sm font-bold text-foreground">{t.common.opponent}</div>
             <div className="text-xs opacity-70">Rating {match.away.rating}</div>
           </div>
         </div>
@@ -74,7 +86,7 @@ export function DraftResultCard({ match }: DraftResultCardProps) {
         </div>
 
         <div className="mt-6 text-center text-xs opacity-60">
-          Monte seu time em wc26-bracket.vercel.app/draft
+          {format(rc.footer, { url: draftUrl })}
         </div>
       </div>
 
@@ -82,7 +94,7 @@ export function DraftResultCard({ match }: DraftResultCardProps) {
         onClick={copyText}
         className="inline-flex items-center gap-2 rounded-lg bg-[var(--accent)] px-5 py-2.5 text-sm font-black text-[var(--background)] transition hover:brightness-110"
       >
-        <Share2 size={16} /> {copied ? "Copiado!" : "Copiar texto do card"}
+        <Share2 size={16} /> {copied ? t.common.copied : rc.copy}
       </button>
     </div>
   );

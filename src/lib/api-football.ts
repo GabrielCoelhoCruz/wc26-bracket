@@ -36,10 +36,6 @@ interface ApiTeam {
   logo: string | null;
 }
 
-interface ApiScore {
-  home: number | null;
-  away: number | null;
-}
 
 interface ApiFixture {
   id: number;

@@ -85,14 +85,30 @@ export interface Team {
   code: TeamCode;
   name: string;       // English name e.g. "Brazil"
   namePt: string;     // Portuguese name e.g. "Brasil"
-  flag: string;       // Emoji flag
-  group: string;      // Group letter e.g. "A" .. "P"
+  nameFa?: string;    // Persian name from API
+  flag: string;       // Emoji flag (fallback)
+  flagUrl?: string;   // flagcdn.com URL from API
+  iso2?: string;      // ISO2 code e.g. "BR"
+  apiId?: string;     // worldcup26.ir team id
+  group: string;      // Group letter e.g. "A" .. "L"
   rating: number;     // 1-100 overall team strength
+}
+
+/** A host stadium for the tournament */
+export interface Stadium {
+  id: string
+  name: string
+  fifaName: string
+  city: string
+  country: string
+  capacity: number
+  region: string
 }
 
 /** A match in the tournament */
 export interface Match {
   id: string;
+  apiId?: string;
   stage:
     | "group"
     | "round_of_32"
@@ -104,12 +120,21 @@ export interface Match {
   group?: string;
   homeTeam: TeamCode;
   awayTeam: TeamCode;
-  date: string; // ISO date string
+  date: string; // YYYY-MM-DD
+  time?: string; // HH:MM local
+  persianDate?: string;
   stadium?: string;
+  stadiumId?: string;
   city?: string;
   homeScore?: number;
   awayScore?: number;
+  homeScorers?: string[];
+  awayScorers?: string[];
+  homeTeamLabel?: string;
+  awayTeamLabel?: string;
   status: "scheduled" | "live" | "finished";
+  /** API time_elapsed: "live", "45'", "HT", etc. */
+  elapsed?: string;
 }
 
 /** A single slot in the knockout bracket tree */
@@ -147,6 +172,9 @@ export interface SharedBracket {
   createdAt: string;
 }
 
+/** Broad role for squad list grouping */
+export type PlayerRole = "GK" | "DEF" | "MID" | "FWD";
+
 /** A player in the draft pool */
 export interface Player {
   id: string;
@@ -165,6 +193,19 @@ export interface Player {
   team: TeamCode;
   rating: number; // 1-99
   photo?: string;
+  shirtNumber?: number;
+  club?: string;
+  role?: PlayerRole;
+}
+
+/** Raw squad entry stored in squads.json (before id/team assignment) */
+export interface SquadPlayerSeed {
+  name: string;
+  position: Player["position"];
+  rating: number;
+  shirtNumber?: number;
+  club?: string;
+  role?: PlayerRole;
 }
 
 /** A drafted team assembled by a player */
@@ -180,4 +221,74 @@ export interface DraftPick {
   round: number;
   options: Player[];
   chosen?: Player;
+}
+
+// ---------------------------------------------------------------------------
+// Campaign (7a0-style bracket-integrated draft)
+// ---------------------------------------------------------------------------
+
+export type PlayStyle = "defensive" | "balanced" | "offensive";
+
+export type DraftMode = "classic" | "almanaque";
+
+export type CampaignPhase = "setup" | "drafting" | "ready" | "playing" | "finished";
+
+export type CampaignOutcome = "champion" | "eliminated";
+
+export type UserSlot = "home" | "away";
+
+/** One round of nation-dice draft (7a0 style) */
+export interface NationDraftRound {
+  round: number;
+  rolledNation: TeamCode;
+  options: Player[];
+  chosen?: Player;
+  rerollsUsed: number;
+}
+
+/** Goal / match event for narrative */
+export interface MatchEvent {
+  minute: number;
+  scorer: string;
+  team: "home" | "away";
+}
+
+/** Extended match result with events and penalties */
+export interface SimulatedMatchResult {
+  homeScore: number;
+  awayScore: number;
+  result: "home" | "away" | "draw";
+  penaltyWinner?: UserSlot;
+  events: MatchEvent[];
+  wentToPenalties: boolean;
+}
+
+/** A knockout match in the campaign */
+export interface CampaignMatch {
+  matchId: string;
+  stage: string;
+  label: string;
+  home: DraftTeam;
+  away: DraftTeam;
+  homeNation?: TeamCode;
+  awayNation?: TeamCode;
+  userSlot: UserSlot;
+  result?: SimulatedMatchResult;
+}
+
+/** Full campaign state (persisted in localStorage) */
+export interface CampaignState {
+  phase: CampaignPhase;
+  formation: string;
+  playStyle: PlayStyle;
+  draftMode: DraftMode;
+  draftRounds: NationDraftRound[];
+  userTeam?: DraftTeam;
+  entryMatchId?: string;
+  userSlot: UserSlot;
+  pathMatchIds: string[];
+  matches: CampaignMatch[];
+  currentMatchIndex: number;
+  outcome?: CampaignOutcome;
+  seed: number;
 }

@@ -1,0 +1,20 @@
+# WC26 Project Rules
+
+## Code
+- TypeScript strict; no `any` unless unavoidable
+- Tailwind for styling; early returns; `handle*` for event handlers
+- Client components need `"use client"` when using hooks
+- Prefer passing `Match[]` into pure lib functions over global static imports
+
+## Next.js
+- App Router in `src/app/`
+- Route handlers in `src/app/api/`
+- Read Next.js 16 docs in `node_modules/next/dist/docs/` before API changes
+
+## Data
+- Team codes are 3-letter strings (`BRA`, `ARG`)
+- Knockout match IDs: `r32-1` … `r32-16`, `r16-1` … `final`, `third-place`
+- Bracket slots use `nextSlotId` for winner propagation
+
+## Commits
+- Format: `feat(scope): description` or `fix(scope): description`

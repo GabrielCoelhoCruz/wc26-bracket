@@ -1,12 +1,14 @@
+"use client"
+
+import { useLanguage } from "@/components/i18n/LanguageProvider"
+
 export default function Footer() {
+  const { t } = useLanguage()
+
   return (
-    <footer className="border-t border-zinc-800/60 bg-[#0f0f0f] px-4 py-6 text-center">
-      <p className="text-sm text-zinc-600">
-        WC26 &mdash; built for the 2026 FIFA World Cup
-      </p>
-      <p className="mt-1 text-xs text-zinc-600">
-        Feito com 💚 no Brasil
-      </p>
+    <footer className="border-t border-border/60 bg-background px-4 py-6 text-center">
+      <p className="text-sm text-muted-foreground">{t.footer.built}</p>
+      <p className="mt-1 text-xs text-muted-foreground/80">{t.footer.madeIn}</p>
     </footer>
-  );
+  )
 }
