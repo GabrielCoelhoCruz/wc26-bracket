@@ -10,21 +10,22 @@ export const revalidate = 30
 export async function GET() {
   try {
     let matches = [...staticMatches]
-    let source = "static"
+    const sources: string[] = []
 
     if (isCopaCatalogConfigured()) {
       const copaFixtures = await fetchCopaFixtures()
       if (copaFixtures.length > 0) {
         matches = mergeCopaFixturesIntoMatches(staticMatches, copaFixtures)
-        source = "projetoCopa-supabase"
+        sources.push("projetoCopa-supabase")
       }
     }
 
-    if (source === "static") {
-      const { teams, games, stadiums } = await fetchAllWorldCupData()
-      matches = mergeApiGamesIntoMatches(staticMatches, games, teams, stadiums)
-      source = "worldcup26.ir"
-    }
+    // worldcup26.ir is always merged for authoritative live scores and status.
+    const { teams, games, stadiums } = await fetchAllWorldCupData()
+    matches = mergeApiGamesIntoMatches(matches, games, teams, stadiums)
+    sources.push("worldcup26.ir")
+
+    const source = sources.length > 0 ? sources.join("+") : "static"
 
     return NextResponse.json({
       matches,

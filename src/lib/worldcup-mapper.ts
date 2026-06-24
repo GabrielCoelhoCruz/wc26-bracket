@@ -48,6 +48,10 @@ function resolveGameStatus(game: WcApiGame): {
   const elapsed = game.time_elapsed?.trim() ?? ""
   const lower = elapsed.toLowerCase()
 
+  if (lower === "finished" || lower === "ft" || lower === "full time") {
+    return { status: "finished", elapsed: "FT" }
+  }
+
   if (lower === "live" || /^\d+/.test(elapsed) || lower === "ht") {
     return { status: "live", elapsed: elapsed || "live" }
   }
@@ -241,25 +245,9 @@ export function mergeApiGamesIntoMatches(
 
   return base.map((m) => {
     const api = apiById.get(m.id) ?? apiByTeams.get(`${m.homeTeam}-${m.awayTeam}`)
-    if (!api || api.status === "scheduled") {
-      if (!api) return { ...m }
-      return {
-        ...m,
-        time: api.time ?? m.time,
-        persianDate: api.persianDate ?? m.persianDate,
-        stadiumId: api.stadiumId ?? m.stadiumId,
-        homeTeamLabel: api.homeTeamLabel ?? m.homeTeamLabel,
-        awayTeamLabel: api.awayTeamLabel ?? m.awayTeamLabel,
-        homeScorers: api.homeScorers ?? m.homeScorers,
-        awayScorers: api.awayScorers ?? m.awayScorers,
-      }
-    }
-    return {
-      ...m,
-      homeScore: api.homeScore,
-      awayScore: api.awayScore,
-      status: api.status,
-      elapsed: api.elapsed,
+    if (!api) return { ...m }
+
+    const metadata = {
       time: api.time ?? m.time,
       persianDate: api.persianDate ?? m.persianDate,
       stadiumId: api.stadiumId ?? m.stadiumId,
@@ -267,6 +255,30 @@ export function mergeApiGamesIntoMatches(
       awayTeamLabel: api.awayTeamLabel ?? m.awayTeamLabel,
       homeScorers: api.homeScorers ?? m.homeScorers,
       awayScorers: api.awayScorers ?? m.awayScorers,
+    }
+
+    if (api.status === "scheduled") {
+      // Clear stale "live" from static seed; keep finished results intact.
+      if (m.status === "live") {
+        return {
+          ...m,
+          ...metadata,
+          status: "scheduled" as const,
+          elapsed: undefined,
+          homeScore: undefined,
+          awayScore: undefined,
+        }
+      }
+      return { ...m, ...metadata }
+    }
+
+    return {
+      ...m,
+      ...metadata,
+      homeScore: api.homeScore,
+      awayScore: api.awayScore,
+      status: api.status,
+      elapsed: api.elapsed,
     }
   })
 }

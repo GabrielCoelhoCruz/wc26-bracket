@@ -197,24 +197,38 @@ export function mergeCopaVenues(
 }
 
 function overlayMatch(base: Match, overlay: Match): Match {
-  const hasResult =
-    overlay.status === "finished" ||
-    overlay.status === "live" ||
-    overlay.homeScore != null ||
-    overlay.awayScore != null;
-
-  return {
-    ...base,
+  const metadata = {
     date: overlay.date ?? base.date,
     time: overlay.time ?? base.time,
     stadium: overlay.stadium ?? base.stadium,
     city: overlay.city ?? base.city,
     apiId: overlay.apiId ?? base.apiId,
+    homeTeamLabel: overlay.homeTeamLabel ?? base.homeTeamLabel,
+    awayTeamLabel: overlay.awayTeamLabel ?? base.awayTeamLabel,
+  }
+
+  if (overlay.status === "scheduled") {
+    if (base.status === "live") {
+      return {
+        ...base,
+        ...metadata,
+        status: "scheduled",
+        elapsed: undefined,
+        homeScore: undefined,
+        awayScore: undefined,
+      }
+    }
+    return { ...base, ...metadata }
+  }
+
+  return {
+    ...base,
+    ...metadata,
     homeScore: overlay.homeScore ?? base.homeScore,
     awayScore: overlay.awayScore ?? base.awayScore,
-    status: hasResult ? overlay.status : base.status,
+    status: overlay.status,
     elapsed: overlay.elapsed ?? base.elapsed,
-  };
+  }
 }
 
 /** Merge scores, kickoff, venue and status from Supabase fixtures into static bracket. */

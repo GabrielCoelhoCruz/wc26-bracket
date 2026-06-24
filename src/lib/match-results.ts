@@ -20,7 +20,20 @@ export function mergeMatchResults(
 
   return base.map((m) => {
     const api = apiByTeams.get(`${m.homeTeam}-${m.awayTeam}`)
-    if (!api || api.status === "scheduled") return { ...m }
+    if (!api) return { ...m }
+
+    if (api.status === "scheduled") {
+      if (m.status === "live") {
+        return {
+          ...m,
+          status: "scheduled" as const,
+          elapsed: undefined,
+          homeScore: undefined,
+          awayScore: undefined,
+        }
+      }
+      return { ...m }
+    }
 
     return {
       ...m,
