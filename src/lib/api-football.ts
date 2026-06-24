@@ -17,12 +17,11 @@ import type {
 // ---------------------------------------------------------------------------
 
 const BASE_URL = "https://v3.football.api-sports.io";
-const API_KEY = process.env.API_FOOTBALL_KEY ?? "";
 
-if (!API_KEY) {
-  console.warn(
-    "[api-football] API_FOOTBALL_KEY is not set. API calls will fail with 401.",
-  );
+let warnedMissingKey = false;
+
+function getApiKey(): string {
+  return process.env.API_FOOTBALL_KEY ?? "";
 }
 
 // ---------------------------------------------------------------------------
@@ -82,6 +81,17 @@ async function apiFetch<T>(
   endpoint: string,
   params: Record<string, string> = {},
 ): Promise<ApiResponse<T>> {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    if (!warnedMissingKey) {
+      console.warn(
+        "[api-football] API_FOOTBALL_KEY is not set. API calls will fail with 401.",
+      );
+      warnedMissingKey = true;
+    }
+    throw new Error("[api-football] API_FOOTBALL_KEY is not configured");
+  }
+
   const url = new URL(`${BASE_URL}${endpoint}`);
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, value);
@@ -89,7 +99,7 @@ async function apiFetch<T>(
 
   const res = await fetch(url.toString(), {
     headers: {
-      "x-rapidapi-key": API_KEY,
+      "x-rapidapi-key": apiKey,
       "x-rapidapi-host": "v3.football.api-sports.io",
     },
   });

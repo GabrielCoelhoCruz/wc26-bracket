@@ -5,7 +5,6 @@ import { fetchCopaFixtures, isCopaCatalogConfigured } from "@/lib/supabase/catal
 import { fetchAllWorldCupData } from "@/lib/worldcup-api"
 import { mergeApiGamesIntoMatches } from "@/lib/worldcup-mapper"
 
-export const dynamic = "force-dynamic"
 export const revalidate = 30
 
 export async function GET() {

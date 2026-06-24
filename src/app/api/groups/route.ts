@@ -3,7 +3,6 @@ import { fetchApiGroups, fetchApiTeams } from "@/lib/worldcup-api"
 import { mapApiGroupsToStandings } from "@/lib/worldcup-mapper"
 import { getAllGroupStandings } from "@/lib/group-standings"
 
-export const dynamic = "force-dynamic"
 export const revalidate = 30
 
 export async function GET() {

@@ -1,12 +1,14 @@
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   buildShareUrl,
   decodeBracketToken,
   encodeBracketToken,
   normalizeShareHash,
+  ShareSecretMissingError,
 } from "@/lib/share-token"
 
 const ORIGINAL_SECRET = process.env.BRACKET_SHARE_SECRET
+const ORIGINAL_NODE_ENV = process.env.NODE_ENV
 
 afterEach(() => {
   if (ORIGINAL_SECRET === undefined) {
@@ -14,6 +16,7 @@ afterEach(() => {
   } else {
     process.env.BRACKET_SHARE_SECRET = ORIGINAL_SECRET
   }
+  vi.stubEnv("NODE_ENV", ORIGINAL_NODE_ENV ?? "test")
 })
 
 describe("share-token", () => {
@@ -44,6 +47,18 @@ describe("share-token", () => {
 
     const tampered = `${token}x`
     const decoded = await decodeBracketToken(tampered)
+    expect(decoded).toBeNull()
+  })
+
+  it("fails closed in production when secret is missing", async () => {
+    vi.stubEnv("NODE_ENV", "production")
+    delete process.env.BRACKET_SHARE_SECRET
+
+    await expect(
+      encodeBracketToken({ predictions: { final: { winner: "BRA" } } }),
+    ).rejects.toBeInstanceOf(ShareSecretMissingError)
+
+    const decoded = await decodeBracketToken("any.token.here")
     expect(decoded).toBeNull()
   })
 

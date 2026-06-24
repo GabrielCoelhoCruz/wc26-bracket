@@ -6,6 +6,12 @@
 import { matches as defaultMatches } from "@/data/matches";
 import { bracketSlots } from "@/data/knockout-bracket";
 import { getGroupQualifiers, getBestThirdPlaceTeams } from "@/lib/group-standings";
+import {
+  defaultLocale,
+  formatMessage,
+  getMessages,
+  type Locale,
+} from "@/lib/i18n";
 import type { Match, TeamCode } from "@/types/wc26";
 
 /**
@@ -187,19 +193,22 @@ export function propagateWinners(
 export function resolveFullBracket(
   predictions: Predictions,
   sourceMatches: readonly Match[] = defaultMatches,
+  locale: Locale = defaultLocale,
 ): ResolvedBracketMatch[] {
   const slotTeamMap = resolveR32Teams(sourceMatches);
   const resolvedMatches: ResolvedBracketMatch[] = [];
   const fixtureMap = buildKnockoutFixtureMap(sourceMatches);
+  const stages = getMessages(locale).stages;
+
+  const roundLabels: Record<number, string> = {
+    1: stages.r32Long,
+    2: stages.r16Long,
+    3: stages.qfLong,
+    4: stages.sfLong,
+    5: `${stages.final} / ${stages.third_place}`,
+  };
 
   const rounds = [1, 2, 3, 4, 5];
-  const roundLabels: Record<number, string> = {
-    1: "32 Avos de Final",
-    2: "16 Avos de Final",
-    3: "Quartas de Final",
-    4: "Semifinal",
-    5: "Final / 3º Lugar",
-  };
 
   for (const round of rounds) {
     const roundSlots = bracketSlots.filter((s) => s.round === round);
@@ -237,7 +246,7 @@ export function resolveFullBracket(
 
       let label = "";
       if (round === 5) {
-        label = matchId === "final" ? "Final" : "3º Lugar";
+        label = matchId === "final" ? stages.final : stages.third_place;
       } else {
         label = roundLabels[round] ?? "";
       }
@@ -267,9 +276,14 @@ export function getTeamForBracketSlot(
 }
 
 /** Get the qualifying match label for a bracket slot (e.g. "1º GRP A") */
-export function getBracketSlotLabel(slotId: string): string {
+export function getBracketSlotLabel(
+  slotId: string,
+  locale: Locale = defaultLocale,
+): string {
   const slot = bracketSlots.find((s) => s.id === slotId);
   if (!slot) return "";
+
+  const m = getMessages(locale);
 
   if (slot.round === 1) {
     const idx = bracketSlots.indexOf(slot);
@@ -282,13 +296,21 @@ export function getBracketSlotLabel(slotId: string): string {
       const [groupOdd, groupEven] = groupPair;
       const posInPair = idx % 4;
 
-      if (posInPair === 0) return `1º GRP ${groupOdd}`;
-      if (posInPair === 1) return `2º GRP ${groupEven}`;
-      if (posInPair === 2) return `1º GRP ${groupEven}`;
-      if (posInPair === 3) return `2º GRP ${groupOdd}`;
+      if (posInPair === 0) {
+        return formatMessage(m.bracket.r32Labels.first, { group: `GRP ${groupOdd}` });
+      }
+      if (posInPair === 1) {
+        return formatMessage(m.bracket.r32Labels.second, { group: `GRP ${groupEven}` });
+      }
+      if (posInPair === 2) {
+        return formatMessage(m.bracket.r32Labels.first, { group: `GRP ${groupEven}` });
+      }
+      if (posInPair === 3) {
+        return formatMessage(m.bracket.r32Labels.second, { group: `GRP ${groupOdd}` });
+      }
     }
 
-    return "3º Melhor";
+    return m.common.thirdBest;
   }
 
   return "";

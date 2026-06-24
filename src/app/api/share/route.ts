@@ -4,9 +4,11 @@ import {
   decodeBracketToken,
   buildShareUrl,
   buildShareText,
+  ShareSecretMissingError,
   type SharePayload,
 } from "@/lib/share-token";
 import { parseShareLangParam, type Locale } from "@/lib/i18n";
+import { sharePostBodySchema } from "@/lib/share-schema";
 
 export const dynamic = "force-dynamic";
 
@@ -17,17 +19,17 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as Partial<SharePayload> & {
-      locale?: string;
-    };
+    const raw = await request.json();
+    const parsed = sharePostBodySchema.safeParse(raw);
 
-    if (!body.predictions || typeof body.predictions !== "object") {
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: "Missing or invalid predictions" },
+        { error: "Invalid request body", details: parsed.error.flatten() },
         { status: 400 },
       );
     }
 
+    const body = parsed.data;
     const payload: SharePayload = {
       predictions: body.predictions,
       ownerName: body.ownerName,
@@ -43,6 +45,14 @@ export async function POST(request: Request) {
       shareText: `${buildShareText(payload.ownerName, locale)}\n${url}`,
     });
   } catch (error) {
+    if (error instanceof ShareSecretMissingError) {
+      console.error("[api/share] share secret not configured");
+      return NextResponse.json(
+        { error: "Share service unavailable" },
+        { status: 503 },
+      );
+    }
+
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error("[api/share] failed to create share", message);
     return NextResponse.json(

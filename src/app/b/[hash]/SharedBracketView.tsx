@@ -41,8 +41,8 @@ export default function SharedBracketView({
   const shareText = `${buildShareText(ownerName, locale)}\n${shareUrl}`;
 
   const resolvedMatches = useMemo(
-    () => resolveFullBracket(predictions, defaultMatches),
-    [predictions],
+    () => resolveFullBracket(predictions, defaultMatches, locale),
+    [predictions, locale],
   );
 
   const champion = predictions["final"]?.winner;

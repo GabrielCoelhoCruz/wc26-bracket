@@ -462,6 +462,20 @@ const messagesPt = {
     invalidDescription: "Link inválido ou expirado.",
     shareDescription: "Dá uma olhada no bracket e manda o seu. ⚽🏆",
   },
+  pages: {
+    error: {
+      badge: "Erro",
+      title: "Algo deu errado",
+      body: "Ocorreu um erro inesperado. Tente recarregar a página.",
+      retry: "Tentar novamente",
+    },
+    notFound: {
+      badge: "404",
+      title: "Fora de jogo",
+      body: "Esta página não existe ou o link de bracket expirou.",
+      home: "Voltar ao início",
+    },
+  },
 } as const
 
 const messagesEn: Messages = {
@@ -864,6 +878,20 @@ const messagesEn: Messages = {
     footer: "wc26.app · Build your bracket and challenge your friends",
     invalidDescription: "Invalid or expired link.",
     shareDescription: "Check out this bracket and send yours. ⚽🏆",
+  },
+  pages: {
+    error: {
+      badge: "Error",
+      title: "Something went wrong",
+      body: "An unexpected error occurred. Try reloading the page.",
+      retry: "Try again",
+    },
+    notFound: {
+      badge: "404",
+      title: "Offside",
+      body: "This page does not exist or the bracket link is invalid.",
+      home: "Back home",
+    },
   },
 }
 

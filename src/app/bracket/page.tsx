@@ -233,8 +233,8 @@ function BracketPageInner() {
 
   // Resolve the full bracket from live results
   const resolvedMatches = useMemo(() => {
-    return resolveFullBracket(predictions, liveMatches);
-  }, [predictions, liveMatches]);
+    return resolveFullBracket(predictions, liveMatches, locale);
+  }, [predictions, liveMatches, locale]);
 
   // Handle prediction change
   const handlePredictionChange = useCallback(

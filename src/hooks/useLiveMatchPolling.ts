@@ -50,10 +50,7 @@ export function useLiveMatchPolling({
       if (!document.hidden) void refresh()
     }
 
-    void refresh().then(() => {
-      if (cancelled) return
-      timer = setInterval(() => void refresh(), POLL_INTERVAL_MS)
-    })
+    void refresh()
 
     document.addEventListener("visibilitychange", handleVisibility)
 

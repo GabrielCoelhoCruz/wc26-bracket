@@ -118,7 +118,7 @@ export default function BolaoPage() {
   }
 
   const resolvedPreview = previewPredictions
-    ? resolveFullBracket(previewPredictions, liveMatches)
+    ? resolveFullBracket(previewPredictions, liveMatches, locale)
     : [];
 
   return (

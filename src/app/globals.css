@@ -105,7 +105,7 @@
   --color-led: var(--led);
   --color-tunnel: var(--tunnel);
   --font-sans: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
   --font-scoreboard: var(--font-scoreboard);
 }
 

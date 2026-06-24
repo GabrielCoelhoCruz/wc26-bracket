@@ -10,9 +10,9 @@
 // Header:  { alg:"HS256", typ:"BRACKET" }
 // Payload: { iat, sub:"bracket", p: compressed predictions, owner? }
 //
-// The secret is read from BRACKET_SHARE_SECRET env var. If missing, the token
-// still works but cannot be cryptographically verified (falls back to unsigned
-// for local development). Invalid signatures are rejected.
+// The secret is read from BRACKET_SHARE_SECRET env var. In production it must be
+// set — encoding/decoding fail closed without it. Unsigned tokens are only
+// allowed in non-production for local development.
 //
 // ---------------------------------------------------------------------------
 
@@ -41,6 +41,17 @@ interface RawSharePayload {
 const TOKEN_TYPE = "BRACKET";
 const ISSUER = "wc26-bracket";
 
+export class ShareSecretMissingError extends Error {
+  constructor() {
+    super("BRACKET_SHARE_SECRET is not configured");
+    this.name = "ShareSecretMissingError";
+  }
+}
+
+function isProduction(): boolean {
+  return process.env.NODE_ENV === "production";
+}
+
 function getSecret(): Uint8Array | null {
   const raw = process.env.BRACKET_SHARE_SECRET;
   if (!raw) return null;
@@ -58,6 +69,11 @@ export async function encodeBracketToken(
   payload: SharePayload,
 ): Promise<string> {
   const secret = getSecret();
+
+  if (!secret && isProduction()) {
+    throw new ShareSecretMissingError();
+  }
+
   const jwt = new SignJWT({
     sub: "bracket",
     p: payload.predictions,
@@ -67,12 +83,7 @@ export async function encodeBracketToken(
     .setIssuer(ISSUER)
     .setIssuedAt();
 
-  if (secret) {
-    return jwt.sign(secret);
-  }
-
-  // Unsigned token for local dev when secret is not set.
-  return jwt.sign(new TextEncoder().encode(""));
+  return jwt.sign(secret ?? new TextEncoder().encode(""));
 }
 
 /**
@@ -85,23 +96,18 @@ export async function decodeBracketToken(
   if (!token) return null;
 
   const secret = getSecret();
-  try {
-    if (secret) {
-      const { payload } = await jwtVerify(token, secret, {
-        issuer: ISSUER,
-        algorithms: ["HS256"],
-      });
-      const raw = payload as unknown as RawSharePayload;
-      return {
-        predictions: raw.p ?? {},
-        ownerName: raw.owner,
-      };
-    }
 
-    // Unsigned verification path for local dev.
-    const { payload } = await jwtVerify(token, new TextEncoder().encode(""), {
+  if (!secret && isProduction()) {
+    return null;
+  }
+
+  try {
+    const key = secret ?? new TextEncoder().encode("");
+    const algorithms = secret ? (["HS256"] as const) : (["none"] as const);
+
+    const { payload } = await jwtVerify(token, key, {
       issuer: ISSUER,
-      algorithms: ["none"],
+      algorithms: [...algorithms],
     });
     const raw = payload as unknown as RawSharePayload;
     return {
