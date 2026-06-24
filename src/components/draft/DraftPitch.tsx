@@ -16,7 +16,7 @@ interface SlotProgress {
 interface DraftPitchProps {
   team: DraftTeam
   formation?: FormationId
-  onSlotClick?: (position: string) => void
+  onSlotClick?: (position: string, index: number) => void
   selectedPosition?: string
   variant?: "default" | "seven"
   slotProgress?: SlotProgress[]
@@ -120,7 +120,7 @@ export function DraftPitch({
                 pickable={isPickable}
                 variant="seven"
                 style={pos}
-                onClick={onSlotClick ? () => onSlotClick(slot.position) : undefined}
+                onClick={onSlotClick ? () => onSlotClick(slot.position, i) : undefined}
               />
             )
           })}
@@ -169,6 +169,7 @@ export function DraftPitch({
 
           if (rowSlots.length === 1) {
             const slot = rowSlots[0]!
+            const slotIndex = gridSlots.indexOf(slot)
             return (
               <div key={row} className="flex flex-1 items-center justify-center">
                 <div className="w-[22%] min-w-[4rem] max-w-[5.5rem]">
@@ -176,7 +177,11 @@ export function DraftPitch({
                     position={slot.position}
                     player={slot.player}
                     selected={selectedPosition === slot.position}
-                    onClick={onSlotClick ? () => onSlotClick(slot.position) : undefined}
+                    onClick={
+                      onSlotClick
+                        ? () => onSlotClick(slot.position, slotIndex)
+                        : undefined
+                    }
                   />
                 </div>
               </div>
@@ -192,6 +197,7 @@ export function DraftPitch({
               {Array.from({ length: colCount }, (_, col) => {
                 const slot = rowSlots.find((s) => s.col === col)
                 if (!slot) return <div key={col} />
+                const slotIndex = gridSlots.indexOf(slot)
 
                 return (
                   <PlayerSlot
@@ -199,7 +205,11 @@ export function DraftPitch({
                     position={slot.position}
                     player={slot.player}
                     selected={selectedPosition === slot.position}
-                    onClick={onSlotClick ? () => onSlotClick(slot.position) : undefined}
+                    onClick={
+                      onSlotClick
+                        ? () => onSlotClick(slot.position, slotIndex)
+                        : undefined
+                    }
                   />
                 )
               })}

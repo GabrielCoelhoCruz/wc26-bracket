@@ -23,11 +23,16 @@ import {
   simulateAllRemaining,
   simulateCurrentMatch,
   startPlaying,
+  syncDraftRoundsToCampaign,
   type NationDraftState,
 } from "@/lib/campaign-sim";
 import {
+  autofillRemaining,
+  autofillRound,
+  ensurePickableNation,
   pickNationPlayer,
   rerollNation,
+  undoLastPick,
 } from "@/lib/draft-nation-roll";
 import { applyGroupScoresToMatches, fetchMergedResults } from "@/lib/match-results";
 import type { FormationId } from "@/lib/formations";
@@ -53,7 +58,10 @@ function loadGroupScores(): Record<string, { homeScore: number; awayScore: numbe
 function DraftCampaignInner() {
   const { t, format } = useLanguage();
   const [campaign, setCampaign] = useState<CampaignState | null>(() => loadCampaign());
-  const [draft, setDraft] = useState<NationDraftState | null>(null);
+  const [draft, setDraft] = useState<NationDraftState | null>(() => {
+    const saved = loadCampaign();
+    return saved?.phase === "drafting" ? saved.nationDraft ?? null : null;
+  });
   const [resultMatches, setResultMatches] = useState<Match[]>([...defaultMatches]);
   const [loadingMatches, setLoadingMatches] = useState(true);
 
@@ -94,28 +102,50 @@ function DraftCampaignInner() {
     clearCampaign();
     const setup = createCampaignSetup(formation, playStyle, draftMode);
     const { campaign: next, draft: d } = beginNationDraft(setup);
-    setCampaign(next);
-    setDraft(d);
+    const ready = ensurePickableNation(d);
+    setCampaign(syncDraftRoundsToCampaign(next, ready));
+    setDraft(ready);
   }
 
-  function handlePick(player: Player) {
-    if (!draft || !campaign) return;
-    const nextDraft = pickNationPlayer(draft, player.id);
-    setDraft(nextDraft);
+  function applyDraft(nextDraft: NationDraftState) {
+    if (!campaign) return;
     if (nextDraft.completed) {
       const prepared = finishDraftAndPrepareCampaign(
-        { ...campaign, draftRounds: nextDraft.draftRounds },
+        syncDraftRoundsToCampaign(campaign, nextDraft),
         nextDraft,
         liveMatches,
       );
       setCampaign(prepared);
       setDraft(null);
+      return;
     }
+    setDraft(nextDraft);
+    setCampaign(syncDraftRoundsToCampaign(campaign, nextDraft));
+  }
+
+  function handlePick(player: Player) {
+    if (!draft || !campaign) return;
+    applyDraft(pickNationPlayer(draft, player.id));
   }
 
   function handleReroll() {
     if (!draft) return;
-    setDraft(rerollNation(draft));
+    applyDraft(ensurePickableNation(rerollNation(draft)));
+  }
+
+  function handleAutofillRound() {
+    if (!draft) return;
+    applyDraft(autofillRound(draft));
+  }
+
+  function handleAutofillRemaining() {
+    if (!draft) return;
+    applyDraft(autofillRemaining(draft));
+  }
+
+  function handleUndo() {
+    if (!draft) return;
+    applyDraft(undoLastPick(draft));
   }
 
   function handleStartCampaign() {
@@ -191,6 +221,9 @@ function DraftCampaignInner() {
             draftMode={campaign.draftMode}
             onPick={handlePick}
             onReroll={handleReroll}
+            onAutofillRound={handleAutofillRound}
+            onAutofillRemaining={handleAutofillRemaining}
+            onUndo={handleUndo}
           />
         )}
 

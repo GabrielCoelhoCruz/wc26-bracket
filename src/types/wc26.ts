@@ -283,6 +283,8 @@ export interface CampaignState {
   playStyle: PlayStyle;
   draftMode: DraftMode;
   draftRounds: NationDraftRound[];
+  /** In-progress nation dice draft (persisted so refresh does not lose picks). */
+  nationDraft?: import("@/lib/draft-nation-roll").NationDraftState | null;
   userTeam?: DraftTeam;
   entryMatchId?: string;
   userSlot: UserSlot;

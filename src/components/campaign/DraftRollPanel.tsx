@@ -4,7 +4,6 @@ import { NationDiceCard } from "@/components/campaign/NationDiceCard"
 import { SquadRosterList } from "@/components/campaign/SquadRosterList"
 import { useLanguage } from "@/components/i18n/LanguageProvider"
 import {
-  getNationDraftRounds,
   getOpenPositionAbbrev,
   getOpenPositionName,
 } from "@/lib/draft-nation-roll"
@@ -24,6 +23,8 @@ interface DraftRollPanelProps {
   onPick: (player: Player) => void
   canPick: (player: Player) => boolean
   squadPlayers: Player[]
+  filledCount: number
+  totalSlots: number
 }
 
 export function DraftRollPanel({
@@ -38,6 +39,8 @@ export function DraftRollPanel({
   onPick,
   canPick,
   squadPlayers,
+  filledCount,
+  totalSlots,
 }: DraftRollPanelProps) {
   const { t, locale } = useLanguage()
   const current = draft.draftRounds[draft.round]
@@ -70,8 +73,8 @@ export function DraftRollPanel({
         canPick={canPick}
         onPick={onPick}
         openPositionName={current ? getOpenPositionAbbrev(draft, locale) : undefined}
-        filledCount={draft.round}
-        totalSlots={getNationDraftRounds(draft)}
+        filledCount={filledCount}
+        totalSlots={totalSlots}
       />
     </div>
   )

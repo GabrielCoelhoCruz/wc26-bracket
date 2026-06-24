@@ -12,9 +12,11 @@ import {
   buildPartialDraftTeam,
   canPickPlayer,
   canReroll,
+  getFilledCount,
   getFormationSlotProgress,
   getNationDraftRounds,
   getOpenPosition,
+  getPickableForRound,
   type NationDraftState,
 } from "@/lib/draft-nation-roll"
 import type { DraftMode, Player } from "@/types/wc26"
@@ -25,6 +27,9 @@ interface NationDraftBoardProps {
   draftMode: DraftMode
   onPick: (player: Player) => void
   onReroll: () => void
+  onAutofillRound: () => void
+  onAutofillRemaining: () => void
+  onUndo: () => void
 }
 
 export function NationDraftBoard({
@@ -32,6 +37,9 @@ export function NationDraftBoard({
   draftMode,
   onPick,
   onReroll,
+  onAutofillRound,
+  onAutofillRemaining,
+  onUndo,
 }: NationDraftBoardProps) {
   const { t } = useLanguage()
   const [rolling, setRolling] = useState(false)
@@ -42,7 +50,8 @@ export function NationDraftBoard({
   const openPosition = getOpenPosition(draft)
   const partialTeam = buildPartialDraftTeam(draft)
   const slotProgress = getFormationSlotProgress(draft)
-  const pickableCount = current?.options.filter((p) => canPickPlayer(draft, p)).length ?? 0
+  const pickableCount = getPickableForRound(draft).length
+  const filledCount = getFilledCount(draft)
   const roundCurrent = Math.min(draft.round + 1, total)
 
   useEffect(() => {
@@ -54,6 +63,14 @@ export function NationDraftBoard({
   const handleReroll = () => {
     setRolling(true)
     onReroll()
+  }
+
+  const handleSlotClick = (slotIndex: number) => {
+    const slot = slotProgress[slotIndex]
+    if (!slot) return
+    if (slot.filled) {
+      onUndo()
+    }
   }
 
   return (
@@ -77,19 +94,21 @@ export function NationDraftBoard({
 
       <div className="draft-seven-slot-pills px-4 pt-3">
         {slotProgress.map((slot, i) => (
-          <span
+          <button
             key={`${slot.position}-${i}`}
+            type="button"
             title={slot.player?.name ?? slot.position}
+            onClick={slot.filled ? () => handleSlotClick(i) : undefined}
             className={`inline-flex h-8 min-w-8 items-center justify-center rounded-lg border px-1.5 text-[10px] font-bold transition ${
               slot.current
                 ? "border-gold bg-gold/20 text-gold glow-gold"
                 : slot.filled
-                  ? "border-grass/50 bg-grass/15 text-foreground"
+                  ? "border-grass/50 bg-grass/15 text-foreground hover:border-gold/50"
                   : "border-border bg-muted/30 text-muted-foreground"
             }`}
           >
             {slot.filled ? getPositionEmoji(slot.position) : slot.position}
-          </span>
+          </button>
         ))}
       </div>
 
@@ -107,12 +126,14 @@ export function NationDraftBoard({
             onPick={onPick}
             canPick={(player) => canPickPlayer(draft, player)}
             squadPlayers={current?.options ?? []}
+            filledCount={filledCount}
+            totalSlots={total}
           />
         </div>
 
         <div className="draft-seven-col-pitch">
           <p className="d7-eyebrow mb-2">
-            {t.common.yourXi} ({partialTeam.players.length}/{total})
+            {t.common.yourXi} ({filledCount}/{total})
           </p>
           <DraftPitch
             team={partialTeam}
@@ -120,14 +141,23 @@ export function NationDraftBoard({
             selectedPosition={openPosition ?? undefined}
             variant="seven"
             slotProgress={slotProgress}
+            onSlotClick={(_, index) => handleSlotClick(index)}
           />
-          {openPosition && (
-            <p className="draft-seven-pitch-hint">{t.common.tapPositionHint}</p>
-          )}
+          <p className="draft-seven-pitch-hint">
+            {filledCount > 0 ? t.common.tapSlotUndo : t.common.tapPositionHint}
+          </p>
         </div>
 
         <div className="draft-seven-col-box">
-          <DraftBoxScore draft={draft} draftMode={draftMode} totalSlots={total} />
+          <DraftBoxScore
+            draft={draft}
+            draftMode={draftMode}
+            totalSlots={total}
+            onAutofillRound={onAutofillRound}
+            onAutofillRemaining={onAutofillRemaining}
+            canAutofill={pickableCount > 0}
+            isComplete={draft.completed}
+          />
         </div>
       </div>
     </div>

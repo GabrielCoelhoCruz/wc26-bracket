@@ -63,7 +63,7 @@ export function beginNationDraft(state: CampaignState): {
     state.seed,
   );
   return {
-    campaign: { ...state, phase: "drafting" },
+    campaign: { ...state, phase: "drafting", nationDraft: draft },
     draft,
   };
 }
@@ -81,6 +81,7 @@ export function finishDraftAndPrepareCampaign(
       ...campaign,
       phase: "ready",
       draftRounds: draft.draftRounds,
+      nationDraft: null,
       userTeam,
       matches: [],
       pathMatchIds: [],
@@ -94,6 +95,7 @@ export function finishDraftAndPrepareCampaign(
       ...campaign,
       phase: "ready",
       draftRounds: draft.draftRounds,
+      nationDraft: null,
       userTeam,
       matches: [],
       pathMatchIds: [],
@@ -124,6 +126,7 @@ export function finishDraftAndPrepareCampaign(
     ...campaign,
     phase: "ready",
     draftRounds: draft.draftRounds,
+    nationDraft: null,
     userTeam,
     entryMatchId: entry.matchId,
     userSlot: entry.userSlot,
@@ -253,6 +256,7 @@ export function syncDraftRoundsToCampaign(
 ): CampaignState {
   return {
     ...campaign,
+    nationDraft: draft.completed ? null : draft,
     draftRounds: draft.draftRounds,
     userTeam: draft.completed ? buildTeamFromNationDraft(draft) : campaign.userTeam,
   };
