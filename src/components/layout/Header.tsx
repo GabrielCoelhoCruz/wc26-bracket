@@ -23,21 +23,17 @@ export default function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-50 border-b border-[var(--card-border)] bg-[var(--background)]">
+    <header className="sticky top-0 z-50 border-b border-zinc-800/60 bg-[#0f0f0f]">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
-        {/* Logo */}
+        {/* Logo — 7a0 style minimal */}
         <Link
           href="/"
-          className="flex items-center gap-2 text-lg font-black tracking-tight text-white transition-colors hover:text-[var(--accent)]"
+          className="text-lg font-black tracking-tight text-white hover:text-zinc-300 transition-colors"
         >
-          <span className="text-xl">⚽</span>
-          <span>WC26</span>
-          <span className="hidden text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] sm:inline-block">
-            Bracket + Draft
-          </span>
+          WC26
         </Link>
 
-        {/* Desktop nav */}
+        {/* Desktop nav — subtle hover/active */}
         <nav className="hidden items-center gap-1 sm:flex">
           {navLinks.map((link) => (
             <Link
@@ -46,8 +42,8 @@ export default function Header() {
               className={clsx(
                 "rounded-lg px-3 py-2 text-sm font-semibold transition-colors",
                 isActive(link.href)
-                  ? "text-[var(--accent)]"
-                  : "text-[var(--foreground)] hover:text-[var(--accent)]",
+                  ? "text-white"
+                  : "text-zinc-500 hover:text-zinc-300",
               )}
             >
               {link.label}
@@ -59,7 +55,7 @@ export default function Header() {
         <button
           onClick={() => setMobileOpen(!mobileOpen)}
           aria-label="Toggle navigation menu"
-          className="inline-flex items-center justify-center rounded-lg p-2 text-[var(--foreground)] transition-colors hover:text-[var(--accent)] sm:hidden"
+          className="inline-flex items-center justify-center rounded-lg p-2 text-zinc-400 hover:text-white transition-colors sm:hidden"
         >
           {mobileOpen ? <X size={24} /> : <Menu size={24} />}
         </button>
@@ -67,7 +63,7 @@ export default function Header() {
 
       {/* Mobile dropdown */}
       {mobileOpen && (
-        <div className="border-t border-[var(--card-border)] bg-[var(--background)] sm:hidden">
+        <div className="border-t border-zinc-800/60 bg-[#0f0f0f] sm:hidden">
           <nav className="flex flex-col px-4 pb-4 pt-2">
             {navLinks.map((link) => (
               <Link
@@ -77,8 +73,8 @@ export default function Header() {
                 className={clsx(
                   "rounded-lg px-3 py-3 text-sm font-semibold transition-colors",
                   isActive(link.href)
-                    ? "text-[var(--accent)]"
-                    : "text-[var(--foreground)] hover:text-[var(--accent)]",
+                    ? "text-white"
+                    : "text-zinc-500 hover:text-zinc-300",
                 )}
               >
                 {link.label}

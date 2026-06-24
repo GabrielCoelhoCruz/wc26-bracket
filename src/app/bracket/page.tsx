@@ -66,7 +66,7 @@ export default function BracketPage() {
 
   if (!isClient) {
     return (
-      <main className="flex min-h-screen items-center justify-center">
+      <main className="flex min-h-screen items-center justify-center text-zinc-400">
         Carregando...
       </main>
     );
@@ -76,40 +76,53 @@ export default function BracketPage() {
   const r32Teams = getR32Teams();
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-4 p-6">
-      <h1 className="text-2xl font-bold">Bracket da Copa 2026</h1>
-      <p className="text-zinc-400">{count} palpite(s) preenchido(s)</p>
+    <main className="flex flex-1 flex-col items-center px-4 py-12 sm:py-20 text-center">
+      <div className="max-w-4xl w-full">
+        {/* Gold section label — 7a0 style */}
+        <p className="text-[#fbbf24] text-sm font-bold tracking-widest mb-4 uppercase">
+          Bracket
+        </p>
 
-      <div className="flex flex-wrap gap-2">
-        <button
-          onClick={seedDummy}
-          className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-500"
-        >
-          Preencher palpites de teste
-        </button>
-        <button
-          onClick={handleSaveToServer}
-          className="rounded bg-green-600 px-4 py-2 text-white hover:bg-green-500"
-        >
-          Salvar no servidor
-        </button>
-        <button
-          onClick={handleReset}
-          className="rounded bg-red-600 px-4 py-2 text-white hover:bg-red-500"
-        >
-          Limpar
-        </button>
-      </div>
+        {/* Title */}
+        <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">
+          Bracket da Copa 2026
+        </h1>
+        <p className="text-zinc-400 text-sm mb-2">
+          {count} palpite(s) preenchido(s)
+        </p>
 
-      {message && (
-        <div className="rounded bg-zinc-800 px-4 py-2 text-sm text-zinc-200">
-          {message}
+        {/* Action buttons — 7a0 style */}
+        <div className="flex flex-wrap justify-center gap-3 mt-6 mb-8">
+          <button
+            onClick={seedDummy}
+            className="px-6 py-3 bg-[#1a5c2a] hover:brightness-110 text-white font-bold text-sm rounded-lg transition-all"
+          >
+            Preencher palpites de teste
+          </button>
+          <button
+            onClick={handleSaveToServer}
+            className="px-6 py-3 border border-zinc-700 hover:border-zinc-500 text-zinc-300 font-bold text-sm rounded-lg transition-all"
+          >
+            Salvar no servidor
+          </button>
+          <button
+            onClick={handleReset}
+            className="px-6 py-3 border border-zinc-700 hover:border-red-500/50 text-zinc-400 font-bold text-sm rounded-lg transition-all"
+          >
+            Limpar
+          </button>
         </div>
-      )}
 
-      <pre className="max-w-md overflow-auto rounded bg-zinc-900 p-4 text-xs text-zinc-300">
-        {JSON.stringify({ predictions, r32Teams }, null, 2)}
-      </pre>
+        {message && (
+          <div className="inline-block rounded-lg bg-zinc-800/80 px-4 py-2 text-sm text-zinc-200 mb-8">
+            {message}
+          </div>
+        )}
+
+        <pre className="mx-auto max-w-2xl overflow-auto rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 text-xs text-zinc-400 text-left">
+          {JSON.stringify({ predictions, r32Teams }, null, 2)}
+        </pre>
+      </div>
     </main>
   );
 }
