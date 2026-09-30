@@ -1,14 +1,14 @@
 # WC26 Bracket
 
-Copa do Mundo 2026 — bracket interativo, draft de XI e ranking local.
+2026 FIFA World Cup — interactive bracket, starting XI draft, and local ranking.
 
 ## Features
 
-- **Bracket**: fase de grupos + mata-mata com palpites e avanço automático
-- **Draft**: monte seu XI 4-3-3 e simule partidas
-- **Ranking**: leaderboard local (importe brackets via link)
-- **Bolão**: compare palpites entre amigos (local-first)
-- **Share**: links JWT assinados (`/api/share`, `/b/[hash]`)
+- **Bracket**: group stage + knockout rounds with predictions and automatic advancement
+- **Draft**: build your 4-3-3 XI and simulate matches
+- **Ranking**: local leaderboard (import brackets by link)
+- **Pool**: compare predictions with friends (local-first)
+- **Share**: signed JWT links (`/api/share`, `/b/[hash]`)
 
 ## Getting Started
 
